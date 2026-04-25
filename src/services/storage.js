@@ -44,6 +44,15 @@ export const removeStoredUserByEmail = async (email) => {
   return nextUsers;
 };
 
+export const updateStoredUserPasswordByEmail = async (email, password) => {
+  const users = await getStoredUsers();
+  const nextUsers = users.map((user) =>
+    user.email === email ? { ...user, password } : user
+  );
+  await setStoredUsers(nextUsers);
+  return nextUsers.find((user) => user.email === email) || null;
+};
+
 export const getStoredCalculations = async () =>
   readJson(STORAGE_KEYS.calculations, []);
 

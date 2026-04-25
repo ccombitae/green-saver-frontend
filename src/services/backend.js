@@ -45,10 +45,30 @@ export const registerRemoteUser = async ({ name, city = "N/A", monthlyConsumptio
   });
 };
 
+export const registerRemoteAuthUser = async ({ name, phone, email, password, role = "user" }) => {
+  return apiRequest("/auth/register", {
+    method: "POST",
+    body: {
+      name,
+      phone,
+      email,
+      password,
+      role,
+    },
+  });
+};
+
 export const loginRemoteUser = async ({ email, password }) => {
   return apiRequest("/auth/login", {
     method: "POST",
     body: { email, password },
+  });
+};
+
+export const resetRemotePassword = async ({ email, newPassword }) => {
+  return apiRequest("/auth/recover-password", {
+    method: "POST",
+    body: { email, newPassword },
   });
 };
 

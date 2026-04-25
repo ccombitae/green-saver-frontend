@@ -1,4 +1,4 @@
-import { loginRemoteUser, registerRemoteUser } from "@/src/services/backend";
+import { loginRemoteUser, registerRemoteAuthUser, resetRemotePassword } from "@/src/services/backend";
 import {
     clearStoredCurrentUser,
     getStoredCurrentUser,
@@ -6,6 +6,7 @@ import {
     removeStoredUserByEmail,
     setStoredCurrentUser,
     setStoredUsers,
+    updateStoredUserPasswordByEmail,
 } from "@/src/services/storage";
 import { createContext, useContext, useEffect, useState } from "react";
 
@@ -116,12 +117,14 @@ export const AuthProvider = ({ children }) => {
 
     await setStoredUsers([...users, newUser]);
 
-    // Sincronización no bloqueante con backend actual.
+    // Sincronización no bloqueante con backend para persistir cuenta completa.
     try {
-      await registerRemoteUser({
+      await registerRemoteAuthUser({
         name: newUser.name,
-        city: "N/A",
-        monthlyConsumption: 0,
+        phone: newUser.phone,
+        email: newUser.email,
+        password: newUser.password,
+        role: newUser.role,
       });
     } catch {
       // El registro local sigue funcionando aunque backend no esté disponible.
@@ -157,6 +160,47 @@ export const AuthProvider = ({ children }) => {
     return nextUsers;
   };
 
+  const resetPassword = async ({ email, newPassword }) => {
+    const normalizedEmail = email?.trim().toLowerCase();
+    const normalizedPassword = newPassword?.trim();
+
+    if (!normalizedEmail || !normalizedPassword) {
+      throw new Error("Correo y nueva contraseña son obligatorios");
+    }
+
+    if (normalizedEmail === adminUser.email) {
+      throw new Error("La contraseña del administrador fijo no se puede recuperar desde esta pantalla");
+    }
+
+    let remoteUpdated = false;
+    try {
+      await resetRemotePassword({
+        email: normalizedEmail,
+        newPassword: normalizedPassword,
+      });
+      remoteUpdated = true;
+    } catch {
+      // Si el backend no está disponible, intentamos fallback local.
+    }
+
+    const users = await getStoredUsers();
+    const exists = users.some((storedUser) => storedUser.email === normalizedEmail);
+
+    if (!exists && !remoteUpdated) {
+      throw new Error("No existe una cuenta registrada con ese correo");
+    }
+
+    const updatedUser = exists
+      ? await updateStoredUserPasswordByEmail(normalizedEmail, normalizedPassword)
+      : null;
+
+    if (user?.email === normalizedEmail && updatedUser) {
+      await setStoredCurrentUser({ ...user, password: normalizedPassword });
+    }
+
+    return true;
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -167,6 +211,7 @@ export const AuthProvider = ({ children }) => {
         loading,
         getRegisteredUsers,
         deleteUser,
+        resetPassword,
       }}
     >
       {children}
