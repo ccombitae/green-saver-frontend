@@ -36,6 +36,44 @@ const parseResponse = async (response) => {
   }
 };
 
+const normalizeErrorMessage = (data, status) => {
+  if (typeof data === "string" && data.trim()) {
+    return data;
+  }
+
+  if (data && typeof data === "object") {
+    const detail = data.detail;
+
+    if (typeof detail === "string" && detail.trim()) {
+      return detail;
+    }
+
+    if (Array.isArray(detail)) {
+      return detail
+        .map((item) => {
+          if (typeof item === "string") {
+            return item;
+          }
+          if (item && typeof item === "object") {
+            return item.msg || item.message || JSON.stringify(item);
+          }
+          return String(item);
+        })
+        .join(" | ");
+    }
+
+    if (detail && typeof detail === "object") {
+      return detail.message || detail.msg || JSON.stringify(detail);
+    }
+
+    if (typeof data.message === "string" && data.message.trim()) {
+      return data.message;
+    }
+  }
+
+  return `HTTP ${status}`;
+};
+
 export const apiRequest = async (path, { method = "GET", query, body, headers = {} } = {}) => {
   const url = withQueryParams(path, query);
 
@@ -51,9 +89,7 @@ export const apiRequest = async (path, { method = "GET", query, body, headers = 
   const data = await parseResponse(response);
 
   if (!response.ok) {
-    const message = typeof data === "object" && data?.detail
-      ? data.detail
-      : `HTTP ${response.status}`;
+    const message = normalizeErrorMessage(data, response.status);
     throw new Error(message);
   }
 

@@ -1,16 +1,17 @@
 import { loginRemoteUser, registerRemoteAuthUser, resetRemotePassword } from "@/src/services/backend";
 import {
-    clearStoredCurrentUser,
-    getStoredCurrentUser,
-    getStoredUsers,
-    removeStoredUserByEmail,
-    setStoredCurrentUser,
-    setStoredUsers,
-    updateStoredUserPasswordByEmail,
+  clearStoredCurrentUser,
+  getStoredCurrentUser,
+  getStoredUsers,
+  removeStoredUserByEmail,
+  setStoredCurrentUser,
+  setStoredUsers,
+  updateStoredUserPasswordByEmail,
 } from "@/src/services/storage";
 import { createContext, useContext, useEffect, useState } from "react";
 
 const AuthContext = createContext();
+const REQUIRE_REMOTE_REGISTRATION = true;
 
 const getDisplayName = (email) =>
   email
@@ -117,7 +118,7 @@ export const AuthProvider = ({ children }) => {
 
     await setStoredUsers([...users, newUser]);
 
-    // Sincronización no bloqueante con backend para persistir cuenta completa.
+    // En esta fase académica exigimos persistencia remota para validar integración.
     try {
       await registerRemoteAuthUser({
         name: newUser.name,
@@ -126,8 +127,12 @@ export const AuthProvider = ({ children }) => {
         password: newUser.password,
         role: newUser.role,
       });
-    } catch {
-      // El registro local sigue funcionando aunque backend no esté disponible.
+    } catch (error) {
+      if (REQUIRE_REMOTE_REGISTRATION) {
+        throw new Error(
+          `No se pudo registrar en backend: ${error?.message || "verifica EXPO_PUBLIC_API_URL y conectividad"}`
+        );
+      }
     }
 
     const sessionUser = {
