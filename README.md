@@ -109,6 +109,25 @@ Si `EXPO_PUBLIC_API_URL` no se define, el proyecto usa `http://localhost:8000` p
 
 ---
 
+## ✅ Evidencias de Validación
+
+Pruebas funcionales validadas contra el backend en Azure:
+
+- `POST /auth/register` (creación de usuario)
+- `POST /auth/login` (inicio de sesión)
+- `POST /auth/recover-password` (actualización de contraseña)
+- `POST /calculos` (creación de cálculo)
+- `GET /calculos` (consulta de cálculos)
+
+Validación de persistencia en PostgreSQL (Azure):
+
+- Inserción de usuarios verificada por SQL en tabla `usuarios`.
+- Inserción de cálculos verificada por SQL en tabla `calculos_sistema`.
+
+Estas evidencias confirman la integración cliente-servidor y el almacenamiento real en la nube.
+
+---
+
 ## 📂 Estructura del proyecto
 green-saver/
 ├── app/
