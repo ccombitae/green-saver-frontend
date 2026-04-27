@@ -102,3 +102,92 @@ export const createRemoteCalculation = async ({
     },
   });
 };
+
+const extractDataArray = (payload) => {
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+
+  if (payload && typeof payload === "object" && Array.isArray(payload.data)) {
+    return payload.data;
+  }
+
+  return [];
+};
+
+const extractDataObject = (payload) => {
+  if (payload && typeof payload === "object" && payload.data && typeof payload.data === "object") {
+    return payload.data;
+  }
+
+  if (payload && typeof payload === "object") {
+    return payload;
+  }
+
+  return {};
+};
+
+const mapQuoteCalculation = (item) => ({
+  id: String(item?.id ?? ""),
+  email: item?.email || "cliente@correo.com",
+  clientName: item?.client_name || item?.nombre || item?.email || "Cliente",
+  consumption: item?.consumption ?? null,
+  estimatedPanels: item?.estimatedpanels ?? item?.estimatedPanels ?? null,
+  coverage: item?.coverage ?? null,
+  estimatedSavings: item?.estimatedsavings ?? item?.estimatedSavings ?? null,
+  recommendation: item?.recommendation || "Sin recomendacion",
+  createdAt: item?.created_at || "",
+});
+
+const mapSentQuote = (item) => ({
+  id: String(item?.id ?? ""),
+  calculationId: String(item?.calculation_id ?? item?.calculationId ?? ""),
+  clientEmail: item?.client_email ?? item?.clientEmail ?? "",
+  clientName: item?.client_name ?? item?.clientName ?? "Cliente",
+  totalPrice: Number(item?.total_price ?? item?.totalPrice ?? 0),
+  status: item?.status || "sent",
+  sentAt: item?.sent_at ?? item?.sentAt ?? "",
+});
+
+export const getRemoteQuoteCalculations = async () => {
+  const response = await apiRequest("/quotes/calculations");
+  return extractDataArray(response).map(mapQuoteCalculation);
+};
+
+export const getRemoteQuoteOptions = async () => {
+  const response = await apiRequest("/quotes/options");
+  const data = extractDataObject(response);
+
+  return {
+    panelTypes: Array.isArray(data.panelTypes) ? data.panelTypes : [],
+    inverterTypes: Array.isArray(data.inverterTypes) ? data.inverterTypes : [],
+    batteryTypes: Array.isArray(data.batteryTypes) ? data.batteryTypes : [],
+    structureTypes: Array.isArray(data.structureTypes) ? data.structureTypes : [],
+  };
+};
+
+export const getRemoteSentQuotes = async () => {
+  const response = await apiRequest("/quotes");
+  return extractDataArray(response).map(mapSentQuote);
+};
+
+export const sendRemoteQuote = async ({
+  calculationId,
+  clientEmail,
+  clientName,
+  totalPrice,
+  notes,
+  materials,
+}) => {
+  return apiRequest("/quotes/send", {
+    method: "POST",
+    body: {
+      calculationId: Number(calculationId),
+      clientEmail,
+      clientName,
+      totalPrice: Number(totalPrice),
+      notes,
+      materials,
+    },
+  });
+};

@@ -1,26 +1,72 @@
 import { useAuth } from "@/src/context/AuthContext";
-import { appendStoredQuote, getStoredCalculations, getStoredQuotes } from "@/src/services/storage";
+import {
+    getRemoteQuoteCalculations,
+    getRemoteQuoteOptions,
+    getRemoteSentQuotes,
+    sendRemoteQuote,
+} from "@/src/services/backend";
 import { Colors } from "@/src/theme/colors";
 import { Redirect } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
-import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import {
+    ActivityIndicator,
+    Alert,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    View,
+} from "react-native";
 
 export default function Quotes() {
   const { user, loading } = useAuth();
-  const [selectedClientEmail, setSelectedClientEmail] = useState("");
+  const [selectedCalculationId, setSelectedCalculationId] = useState("");
   const [price, setPrice] = useState("");
   const [notes, setNotes] = useState("");
   const [calculations, setCalculations] = useState([]);
   const [sentQuotes, setSentQuotes] = useState([]);
+  const [quoteOptions, setQuoteOptions] = useState({
+    panelTypes: [],
+    inverterTypes: [],
+    batteryTypes: [],
+    structureTypes: [],
+  });
+  const [materialSelection, setMaterialSelection] = useState({
+    panelType: "",
+    inverterType: "",
+    batteryType: "",
+    structureType: "",
+  });
+  const [isBootstrapping, setIsBootstrapping] = useState(false);
+  const [isSending, setIsSending] = useState(false);
 
   useEffect(() => {
     const loadData = async () => {
-      const [storedCalculations, storedQuotes] = await Promise.all([
-        getStoredCalculations(),
-        getStoredQuotes(),
-      ]);
-      setCalculations(storedCalculations);
-      setSentQuotes(storedQuotes);
+      setIsBootstrapping(true);
+
+      try {
+        const [remoteCalculations, remoteOptions, remoteQuotes] = await Promise.all([
+          getRemoteQuoteCalculations(),
+          getRemoteQuoteOptions(),
+          getRemoteSentQuotes(),
+        ]);
+
+        setCalculations(remoteCalculations);
+        setQuoteOptions(remoteOptions);
+        setSentQuotes(remoteQuotes);
+
+        setMaterialSelection({
+          panelType: remoteOptions.panelTypes[0] || "",
+          inverterType: remoteOptions.inverterTypes[0] || "",
+          batteryType: remoteOptions.batteryTypes[0] || "",
+          structureType: remoteOptions.structureTypes[0] || "",
+        });
+      } catch (error) {
+        Alert.alert("Error", error.message || "No fue posible cargar cotizaciones.");
+      } finally {
+        setIsBootstrapping(false);
+      }
     };
 
     if (user?.role === "admin") {
@@ -28,54 +74,88 @@ export default function Quotes() {
     }
   }, [user?.role]);
 
-  const uniqueClients = useMemo(() => {
-    const map = new Map();
+  const selectedCalculation = useMemo(() => {
+    return calculations.find((item) => item.id === selectedCalculationId) || null;
+  }, [calculations, selectedCalculationId]);
 
-    calculations.forEach((item) => {
-      const email = item.requestedBy || "cliente@correo.com";
-      if (!map.has(email)) {
-        map.set(email, {
-          email,
-          name: item.clientName || email,
-          lastPanels: item.estimatedPanels,
-          lastConsumption: item.consumption,
-        });
-      }
+  const updateMaterialSelection = (key, value) => {
+    setMaterialSelection((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const allMaterialsSelected = useMemo(() => {
+    return (
+      materialSelection.panelType &&
+      materialSelection.inverterType &&
+      materialSelection.batteryType &&
+      materialSelection.structureType
+    );
+  }, [materialSelection]);
+
+  const formatDate = (value) => {
+    if (!value) {
+      return "Sin fecha";
+    }
+
+    return new Date(value).toLocaleDateString("es-ES", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
     });
+  };
 
-    return Array.from(map.values());
-  }, [calculations]);
+  const formatCurrency = (value) => {
+    const numeric = Number(value);
+
+    if (!Number.isFinite(numeric)) {
+      return "USD 0.00";
+    }
+
+    return `USD ${numeric.toFixed(2)}`;
+  };
 
   const handleSendQuote = async () => {
-    if (!selectedClientEmail || !price) {
-      Alert.alert("Campos requeridos", "Selecciona cliente y agrega un precio de cotización.");
+    if (!selectedCalculation || !price || !allMaterialsSelected) {
+      Alert.alert(
+        "Campos requeridos",
+        "Selecciona cálculo, precio y todos los materiales de la cotización."
+      );
       return;
     }
 
-    const clientData = uniqueClients.find((client) => client.email === selectedClientEmail);
+    const normalizedPrice = Number(price);
+    if (!Number.isFinite(normalizedPrice) || normalizedPrice <= 0) {
+      Alert.alert("Precio inválido", "Ingresa un precio total válido mayor a cero.");
+      return;
+    }
 
-    const newQuote = {
-      id: String(Date.now()),
-      date: new Date().toLocaleDateString("es-ES", {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-      }),
-      clientEmail: selectedClientEmail,
-      clientName: clientData?.name || selectedClientEmail,
-      price,
-      notes: notes || "Sin observaciones",
-      status: "Enviada",
-    };
+    setIsSending(true);
 
-    const nextQuotes = await appendStoredQuote(newQuote);
-    setSentQuotes(nextQuotes);
-    setPrice("");
-    setNotes("");
-    Alert.alert("Cotización enviada", "La propuesta fue registrada correctamente.");
+    try {
+      await sendRemoteQuote({
+        calculationId: selectedCalculation.id,
+        clientEmail: selectedCalculation.email,
+        clientName: selectedCalculation.clientName,
+        totalPrice: normalizedPrice,
+        notes,
+        materials: materialSelection,
+      });
+
+      const refreshedQuotes = await getRemoteSentQuotes();
+      setSentQuotes(refreshedQuotes);
+      setPrice("");
+      setNotes("");
+
+      Alert.alert("Cotización enviada", "La propuesta fue enviada por correo y guardada.");
+    } catch (error) {
+      Alert.alert("Error", error.message || "No se pudo enviar la cotización.");
+    } finally {
+      setIsSending(false);
+    }
   };
 
-  if (loading) return null;
+  if (loading) {
+    return null;
+  }
 
   if (!user) return <Redirect href="/login" />;
 
@@ -89,34 +169,121 @@ export default function Quotes() {
       <View style={styles.heroCard}>
         <Text style={styles.kicker}>Gestión comercial</Text>
         <Text style={styles.title}>Enviar cotización</Text>
-        <Text style={styles.subtitle}>Selecciona un cliente que realizó cálculo y registra una propuesta económica.</Text>
+        <Text style={styles.subtitle}>
+          Selecciona un cálculo específico, define materiales y envía la propuesta real por correo.
+        </Text>
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Clientes con cálculo</Text>
+        <Text style={styles.cardTitle}>Cálculos disponibles</Text>
 
-        {uniqueClients.length === 0 ? (
-          <Text style={styles.emptyText}>Aún no hay cálculos de clientes.</Text>
+        {isBootstrapping ? (
+          <ActivityIndicator color={Colors.primary} />
+        ) : calculations.length === 0 ? (
+          <Text style={styles.emptyText}>Aún no hay cálculos listos para cotizar.</Text>
         ) : (
-          uniqueClients.map((client) => (
+          calculations.map((calc) => (
             <Pressable
-              key={client.email}
+              key={calc.id}
               style={[
                 styles.clientItem,
-                selectedClientEmail === client.email && styles.clientItemSelected,
+                selectedCalculationId === calc.id && styles.clientItemSelected,
               ]}
-              onPress={() => setSelectedClientEmail(client.email)}
+              onPress={() => setSelectedCalculationId(calc.id)}
             >
-              <Text style={styles.clientName}>{client.name}</Text>
-              <Text style={styles.clientInfo}>{client.email}</Text>
-              <Text style={styles.clientInfo}>Último cálculo: {client.lastPanels} paneles / {client.lastConsumption} kWh</Text>
+              <Text style={styles.clientName}>{calc.clientName}</Text>
+              <Text style={styles.clientInfo}>{calc.email}</Text>
+              <Text style={styles.clientInfo}>
+                Cálculo #{calc.id} · {calc.estimatedPanels ?? "-"} paneles · {calc.consumption ?? "-"} kWh
+              </Text>
+              <Text style={styles.clientInfo}>Fecha: {formatDate(calc.createdAt)}</Text>
             </Pressable>
           ))
         )}
       </View>
 
       <View style={styles.card}>
+        <Text style={styles.cardTitle}>Materiales predefinidos</Text>
+
+        <Text style={styles.groupLabel}>Paneles</Text>
+        <View style={styles.optionWrap}>
+          {quoteOptions.panelTypes.map((item) => (
+            <Pressable
+              key={`panel-${item}`}
+              style={[
+                styles.optionChip,
+                materialSelection.panelType === item && styles.optionChipSelected,
+              ]}
+              onPress={() => updateMaterialSelection("panelType", item)}
+            >
+              <Text style={styles.optionChipText}>{item}</Text>
+            </Pressable>
+          ))}
+        </View>
+
+        <Text style={styles.groupLabel}>Inversores</Text>
+        <View style={styles.optionWrap}>
+          {quoteOptions.inverterTypes.map((item) => (
+            <Pressable
+              key={`inverter-${item}`}
+              style={[
+                styles.optionChip,
+                materialSelection.inverterType === item && styles.optionChipSelected,
+              ]}
+              onPress={() => updateMaterialSelection("inverterType", item)}
+            >
+              <Text style={styles.optionChipText}>{item}</Text>
+            </Pressable>
+          ))}
+        </View>
+
+        <Text style={styles.groupLabel}>Baterías</Text>
+        <View style={styles.optionWrap}>
+          {quoteOptions.batteryTypes.map((item) => (
+            <Pressable
+              key={`battery-${item}`}
+              style={[
+                styles.optionChip,
+                materialSelection.batteryType === item && styles.optionChipSelected,
+              ]}
+              onPress={() => updateMaterialSelection("batteryType", item)}
+            >
+              <Text style={styles.optionChipText}>{item}</Text>
+            </Pressable>
+          ))}
+        </View>
+
+        <Text style={styles.groupLabel}>Estructuras</Text>
+        <View style={styles.optionWrap}>
+          {quoteOptions.structureTypes.map((item) => (
+            <Pressable
+              key={`structure-${item}`}
+              style={[
+                styles.optionChip,
+                materialSelection.structureType === item && styles.optionChipSelected,
+              ]}
+              onPress={() => updateMaterialSelection("structureType", item)}
+            >
+              <Text style={styles.optionChipText}>{item}</Text>
+            </Pressable>
+          ))}
+        </View>
+      </View>
+
+      <View style={styles.card}>
         <Text style={styles.cardTitle}>Nueva cotización</Text>
+
+        {selectedCalculation ? (
+          <View style={styles.selectedBox}>
+            <Text style={styles.selectedTitle}>Cálculo seleccionado: #{selectedCalculation.id}</Text>
+            <Text style={styles.selectedText}>{selectedCalculation.clientName} · {selectedCalculation.email}</Text>
+            <Text style={styles.selectedText}>Cobertura estimada: {selectedCalculation.coverage ?? "-"}%</Text>
+            <Text style={styles.selectedText}>
+              Ahorro estimado: {selectedCalculation.estimatedSavings ?? "-"}
+            </Text>
+          </View>
+        ) : null}
+
         <TextInput
           style={styles.input}
           placeholder="Precio total (USD)"
@@ -135,8 +302,14 @@ export default function Quotes() {
           onChangeText={setNotes}
         />
 
-        <Pressable style={styles.primaryButton} onPress={handleSendQuote}>
-          <Text style={styles.primaryButtonText}>Enviar cotización</Text>
+        <Pressable
+          style={[styles.primaryButton, isSending && styles.primaryButtonDisabled]}
+          onPress={handleSendQuote}
+          disabled={isSending}
+        >
+          <Text style={styles.primaryButtonText}>
+            {isSending ? "Enviando..." : "Enviar cotización"}
+          </Text>
         </Pressable>
       </View>
 
@@ -149,8 +322,9 @@ export default function Quotes() {
             <View key={quote.id} style={styles.quoteItem}>
               <Text style={styles.quoteTitle}>{quote.clientName}</Text>
               <Text style={styles.quoteText}>{quote.clientEmail}</Text>
-              <Text style={styles.quoteText}>Precio: ${quote.price}</Text>
-              <Text style={styles.quoteStatus}>{quote.status} - {quote.date}</Text>
+              <Text style={styles.quoteText}>Cálculo #{quote.calculationId}</Text>
+              <Text style={styles.quoteText}>Precio: {formatCurrency(quote.totalPrice)}</Text>
+              <Text style={styles.quoteStatus}>{quote.status} - {formatDate(quote.sentAt)}</Text>
             </View>
           ))
         )}
@@ -226,6 +400,33 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     fontSize: 16,
   },
+  groupLabel: {
+    marginTop: 4,
+    color: Colors.dark,
+    fontWeight: "700",
+    fontSize: 13,
+  },
+  optionWrap: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  optionChip: {
+    borderWidth: 1,
+    borderColor: "#DCE7E1",
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    backgroundColor: "#F6F8F7",
+  },
+  optionChipSelected: {
+    borderColor: Colors.primary,
+    backgroundColor: "#EAF6EE",
+  },
+  optionChipText: {
+    color: Colors.dark,
+    fontSize: 12,
+  },
   clientItem: {
     borderWidth: 1,
     borderColor: "#DCE7E1",
@@ -258,11 +459,30 @@ const styles = StyleSheet.create({
     minHeight: 90,
     textAlignVertical: "top",
   },
+  selectedBox: {
+    borderWidth: 1,
+    borderColor: "#DCE7E1",
+    borderRadius: 12,
+    padding: 10,
+    gap: 2,
+    backgroundColor: "#F6F8F7",
+  },
+  selectedTitle: {
+    color: Colors.dark,
+    fontWeight: "700",
+  },
+  selectedText: {
+    color: Colors.gray,
+    fontSize: 13,
+  },
   primaryButton: {
     backgroundColor: Colors.primary,
     borderRadius: 12,
     paddingVertical: 12,
     alignItems: "center",
+  },
+  primaryButtonDisabled: {
+    opacity: 0.75,
   },
   primaryButtonText: {
     color: Colors.surface,
