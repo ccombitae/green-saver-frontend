@@ -27,6 +27,8 @@ export default function Register() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     Animated.parallel([
@@ -48,18 +50,33 @@ export default function Register() {
   };
 
   const handleRegister = async () => {
+    setErrorMessage("");
+
     if (!name || !phone || !email || !password || !confirmPassword) {
-      Alert.alert("Error", "Completa todos los campos");
+      const message = "Completa todos los campos";
+      setErrorMessage(message);
+      Alert.alert("Error", message);
       return;
     }
 
     if (password !== confirmPassword) {
-      Alert.alert("Error", "Las contraseñas no coinciden");
+      const message = "Las contraseñas no coinciden";
+      setErrorMessage(message);
+      Alert.alert("Error", message);
       return;
     }
 
+    setIsSubmitting(true);
+
     try {
-      await register({ name, phone, email, password });
+      const result = await register({ name, phone, email, password });
+
+      if (result?.warning) {
+        setErrorMessage(result.warning);
+        Alert.alert("Aviso", result.warning);
+        return;
+      }
+
       Alert.alert("Registro exitoso", "Tu sesión se abrió automáticamente");
       setName("");
       setPhone("");
@@ -68,7 +85,11 @@ export default function Register() {
       setConfirmPassword("");
       router.replace("/");
     } catch (error) {
-      Alert.alert("Error", error.message);
+      const message = error?.message || "No se pudo completar el registro";
+      setErrorMessage(message);
+      Alert.alert("Error", message);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -99,6 +120,8 @@ export default function Register() {
         <Text style={styles.helperText}>
           Completa tus datos para crear tu acceso y registrar tu cuenta correctamente.
         </Text>
+
+        {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
 
         <View style={styles.inputGroup}>
           <Ionicons name="person-outline" size={18} color={Colors.gray} style={styles.inputIcon} />
@@ -182,11 +205,18 @@ export default function Register() {
         </View>
 
         <Pressable
-          style={({ pressed }) => [styles.primaryButton, pressed && styles.buttonPressed]}
+          style={({ pressed }) => [
+            styles.primaryButton,
+            isSubmitting && styles.primaryButtonDisabled,
+            pressed && !isSubmitting && styles.buttonPressed,
+          ]}
           onPressIn={handleHapticPress}
           onPress={handleRegister}
+          disabled={isSubmitting}
         >
-          <Text style={styles.primaryButtonText}>Crear cuenta</Text>
+          <Text style={styles.primaryButtonText}>
+            {isSubmitting ? "Creando cuenta..." : "Crear cuenta"}
+          </Text>
         </Pressable>
 
         <Pressable
@@ -285,6 +315,18 @@ const styles = StyleSheet.create({
     marginTop: -4,
     marginBottom: 4,
   },
+  errorText: {
+    color: "#B42318",
+    backgroundColor: "rgba(180, 35, 24, 0.08)",
+    borderColor: "rgba(180, 35, 24, 0.18)",
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    fontSize: 13,
+    lineHeight: 18,
+    marginTop: 2,
+  },
   inputGroup: {
     flexDirection: "row",
     alignItems: "center",
@@ -312,6 +354,9 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: "center",
     marginTop: 4,
+  },
+  primaryButtonDisabled: {
+    opacity: 0.72,
   },
   buttonPressed: {
     opacity: 0.86,
