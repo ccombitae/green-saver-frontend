@@ -1,4 +1,4 @@
-const DEFAULT_API_BASE_URL = "https://green-saver-api-e0cjeqdccwg0h9dr.canadacentral-01.azurewebsites.net";
+const DEFAULT_API_BASE_URL = "https://green-saver-api.onrender.com";
 let authTokenResolver = () => null;
 let unauthorizedHandler = null;
 

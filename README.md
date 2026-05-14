@@ -94,14 +94,14 @@ Este enfoque permite una organización clara del proyecto y un control efectivo 
 
 El frontend está integrado con el backend desplegado en Azure App Service:
 
-- **URL base API**: `https://green-saver-api-e0cjeqdccwg0h9dr.canadacentral-01.azurewebsites.net`
-- **Swagger**: `https://green-saver-api-e0cjeqdccwg0h9dr.canadacentral-01.azurewebsites.net/docs`
+- **URL base API**: `https://green-saver-api.onrender.com`
+- **Swagger**: `https://green-saver-api.onrender.com/docs`
 
 Para ejecutar el frontend apuntando al backend cloud:
 
 ```powershell
 Set-Location C:\Users\combi\green-saver
-$env:EXPO_PUBLIC_API_URL='https://green-saver-api-e0cjeqdccwg0h9dr.canadacentral-01.azurewebsites.net'
+$env:EXPO_PUBLIC_API_URL='https://green-saver-api.onrender.com'
 npx expo start --host lan --port 8090 --clear
 ```
 
