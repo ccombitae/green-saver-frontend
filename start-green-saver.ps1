@@ -1,6 +1,9 @@
 param(
     [string]$BackendPath = "",
+    [string]$BackendPython = "",
     [string]$FrontendPath = "",
+    [string]$RenderApiUrl = "https://green-saver-api.onrender.com",
+    [switch]$ForceLocalBackend,
     [string]$MysqlExe = "C:\xampp\mysql\bin\mysqld.exe",
     [string]$MysqlConfig = "C:\xampp\mysql\bin\my.ini",
     [string]$DatabasePort = "3308",
@@ -14,7 +17,25 @@ $ErrorActionPreference = 'Stop'
 $scriptRoot = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $MyInvocation.MyCommand.Path }
 
 if ([string]::IsNullOrWhiteSpace($BackendPath)) {
-    $BackendPath = Join-Path $scriptRoot '..\greensaver-backend\backend'
+    $primaryBackendPath = Join-Path $scriptRoot '..\green-saver-backend'
+    $legacyBackendPath = Join-Path $scriptRoot '..\greensaver-backend\backend'
+
+    if (Test-Path $primaryBackendPath) {
+        $BackendPath = $primaryBackendPath
+    }
+    else {
+        $BackendPath = $legacyBackendPath
+    }
+}
+
+if ([string]::IsNullOrWhiteSpace($BackendPython)) {
+    $venvPython = Join-Path $BackendPath '.venv\Scripts\python.exe'
+    if (Test-Path $venvPython) {
+        $BackendPython = $venvPython
+    }
+    else {
+        $BackendPython = 'python'
+    }
 }
 
 if ([string]::IsNullOrWhiteSpace($FrontendPath)) {
@@ -33,14 +54,31 @@ if (-not (Test-Path $BackendPath)) {
     throw "No se encontró el backend en: $BackendPath. Usa -BackendPath para indicar la ruta correcta."
 }
 
+if (($BackendPython -ne 'python') -and (-not (Test-Path $BackendPython))) {
+    throw "No se encontró el ejecutable de Python del backend en: $BackendPython"
+}
+
 if (-not (Test-Path $FrontendPath)) {
     throw "No se encontró el frontend en: $FrontendPath. Usa -FrontendPath para indicar la ruta correcta."
 }
 
+$resolvedDatabaseUrl =
+    [Environment]::GetEnvironmentVariable('DATABASE_URL', 'Process')
+
+if ([string]::IsNullOrWhiteSpace($resolvedDatabaseUrl)) {
+    $resolvedDatabaseUrl = [Environment]::GetEnvironmentVariable('DATABASE_URL', 'User')
+}
+
+if ([string]::IsNullOrWhiteSpace($resolvedDatabaseUrl)) {
+    $resolvedDatabaseUrl = [Environment]::GetEnvironmentVariable('DATABASE_URL', 'Machine')
+}
+
+$useLocalBackend = $ForceLocalBackend.IsPresent -or -not [string]::IsNullOrWhiteSpace($resolvedDatabaseUrl)
+
 # Función para esperar a que la base de datos esté disponible
 function Wait-ForDatabasePort {
     param(
-        [string]$Host = "127.0.0.1",
+        [string]$HostName = "127.0.0.1",
         [int]$Port = 3308,
         [int]$MaxAttempts = 30,
         [int]$DelaySeconds = 1
@@ -48,9 +86,9 @@ function Wait-ForDatabasePort {
     
     $attempt = 0
     while ($attempt -lt $MaxAttempts) {
-        $tcp = Test-NetConnection -ComputerName $Host -Port $Port -WarningAction SilentlyContinue
+        $tcp = Test-NetConnection -ComputerName $HostName -Port $Port -WarningAction SilentlyContinue
         if ($tcp.TcpTestSucceeded) {
-            Write-Output "[OK] Base de datos disponible en ${Host}:${Port}"
+            Write-Output "[OK] Base de datos disponible en ${HostName}:${Port}"
             return $true
         }
         $attempt++
@@ -60,20 +98,25 @@ function Wait-ForDatabasePort {
         }
     }
     
-    Write-Error "Base de datos no respondió en ${Host}:${Port} después de $MaxAttempts intentos."
+    Write-Error "Base de datos no respondió en ${HostName}:${Port} después de $MaxAttempts intentos."
     return $false
 }
 
-$mysqlRunning = Get-Process mysqld, mariadbd -ErrorAction SilentlyContinue
-if (-not $mysqlRunning) {
-    Write-Output "Iniciando MariaDB..."
-    Start-Process -FilePath $MysqlExe -ArgumentList "--defaults-file=$MysqlConfig", "--console" -WindowStyle Hidden
-    Start-Sleep -Seconds 2
-}
+if ($useLocalBackend) {
+    $mysqlRunning = Get-Process mysqld, mariadbd -ErrorAction SilentlyContinue
+    if (-not $mysqlRunning) {
+        Write-Output "Iniciando MariaDB..."
+        Start-Process -FilePath $MysqlExe -ArgumentList "--defaults-file=$MysqlConfig", "--console" -WindowStyle Hidden
+        Start-Sleep -Seconds 2
+    }
 
-# Esperar a que MariaDB esté disponible antes de iniciar el backend
-if (-not (Wait-ForDatabasePort -Host "127.0.0.1" -Port [int]$DatabasePort)) {
-    throw "No se pudo conectar a la base de datos. Por favor revisa MariaDB."
+    # Esperar a que MariaDB esté disponible antes de iniciar el backend
+    if (-not (Wait-ForDatabasePort -HostName "127.0.0.1" -Port $DatabasePort)) {
+        throw "No se pudo conectar a la base de datos. Por favor revisa MariaDB."
+    }
+}
+else {
+    Write-Warning "No se encontró DATABASE_URL local. El frontend se conectará a Render: $RenderApiUrl"
 }
 
 if ([string]::IsNullOrWhiteSpace($LanIp)) {
@@ -136,19 +179,36 @@ foreach ($processId in $expoPids) {
 }
 
 $backendEnv = @"
-`$env:DB_PORT='$DatabasePort'
+`$env:DATABASE_URL='$resolvedDatabaseUrl'
 Set-Location '$BackendPath'
-& c:/python314/python.exe -m uvicorn main:app --reload --host 0.0.0.0 --port $ApiPort
+& '$BackendPython' -m uvicorn app.main:app --app-dir '$BackendPath' --reload --host 0.0.0.0 --port $ApiPort
 "@
 
+$frontendApiUrl = if ($useLocalBackend) { "http://${LanIp}:$ApiPort" } else { $RenderApiUrl }
 $frontendEnv = @"
-`$env:EXPO_PUBLIC_API_URL='http://${LanIp}:$ApiPort'
+`$env:EXPO_PUBLIC_API_URL='$frontendApiUrl'
 `$env:REACT_NATIVE_PACKAGER_HOSTNAME='$LanIp'
 Set-Location '$FrontendPath'
 npx expo start --host lan --port $ExpoPort --clear
 "@
 
-Start-Process -FilePath powershell -ArgumentList @('-NoExit', '-Command', $backendEnv)
+# Validar dependencias minimas del backend antes de abrir terminales
+if ($useLocalBackend -and $BackendPython -ne 'python') {
+    $uvicornCheck = & $BackendPython -c "import uvicorn" 2>$null
+    if ($LASTEXITCODE -ne 0) {
+        throw "El entorno virtual del backend no tiene uvicorn. Ejecuta: $BackendPython -m pip install -r '$BackendPath\requirements.txt'"
+    }
+}
+
+if ($useLocalBackend) {
+    $backendProcess = Start-Process -FilePath powershell -ArgumentList @('-NoExit', '-Command', $backendEnv) -PassThru
+
+    # Asegurar que la API este arriba antes de iniciar Expo para evitar timeouts en login/registro.
+    if (-not (Wait-ForDatabasePort -HostName '127.0.0.1' -Port ([int]$ApiPort) -MaxAttempts 25 -DelaySeconds 1)) {
+        throw "El backend no inicio en el puerto $ApiPort. Revisa la consola del backend (PID $($backendProcess.Id))."
+    }
+}
+
 Start-Process -FilePath powershell -ArgumentList @('-NoExit', '-Command', $frontendEnv)
 
 Write-Host '════════════════════════════════════════════════════════════════' -ForegroundColor Green
@@ -156,8 +216,13 @@ Write-Host '[OK] Todos los servicios estan iniciando...' -ForegroundColor Green
 Write-Host '════════════════════════════════════════════════════════════════' -ForegroundColor Green
 Write-Host ""
 Write-Host "  [DB]      Base de datos:  MariaDB en http://127.0.0.1:$DatabasePort" -ForegroundColor Cyan
-Write-Host "  [API]     Backend:      FastAPI en http://127.0.0.1:$ApiPort" -ForegroundColor Cyan
-Write-Host "  [API-LAN] Backend LAN:  http://${LanIp}:$ApiPort" -ForegroundColor Cyan
+if ($useLocalBackend) {
+    Write-Host "  [API]     Backend:      FastAPI en http://127.0.0.1:$ApiPort" -ForegroundColor Cyan
+    Write-Host "  [API-LAN] Backend LAN:  http://${LanIp}:$ApiPort" -ForegroundColor Cyan
+}
+else {
+    Write-Host "  [API]     Backend:      Render en $RenderApiUrl" -ForegroundColor Cyan
+}
 Write-Host "  [EXPO]    Frontend:     Expo en http://${LanIp}:$ExpoPort" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "  -> Abre Expo Go en tu telefono y escanea el QR que aparecera" -ForegroundColor Yellow

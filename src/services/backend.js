@@ -132,9 +132,9 @@ const mapQuoteCalculation = (item) => ({
   email: item?.email || "cliente@correo.com",
   clientName: item?.client_name || item?.nombre || item?.email || "Cliente",
   consumption: item?.consumption ?? null,
-  estimatedPanels: item?.estimatedpanels ?? item?.estimatedPanels ?? null,
+  estimatedPanels: item?.estimated_panels ?? item?.estimatedpanels ?? item?.estimatedPanels ?? null,
   coverage: item?.coverage ?? null,
-  estimatedSavings: item?.estimatedsavings ?? item?.estimatedSavings ?? null,
+  estimatedSavings: item?.estimated_savings ?? item?.estimatedsavings ?? item?.estimatedSavings ?? null,
   recommendation: item?.recommendation || "Sin recomendacion",
   createdAt: item?.created_at || "",
 });

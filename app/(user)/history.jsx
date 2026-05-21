@@ -1,3 +1,4 @@
+import { useAuth } from "@/src/context/AuthContext";
 import { getRemoteCalculations } from "@/src/services/backend";
 import { getStoredCalculations } from "@/src/services/storage";
 import { Colors } from "@/src/theme/colors";
@@ -7,15 +8,35 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 
 export default function History() {
   const router = useRouter();
+  const { user, loading } = useAuth();
   const [history, setHistory] = useState([]);
+
+  const filterByCurrentUser = (items = []) => {
+    const currentEmail = user?.email?.toLowerCase();
+
+    if (!currentEmail) {
+      return [];
+    }
+
+    return items.filter((item) => {
+      const itemEmail = String(item?.requestedBy || item?.email || item?.clientEmail || "").toLowerCase();
+      return itemEmail === currentEmail;
+    });
+  };
 
   useEffect(() => {
     const loadHistory = async () => {
+      if (!user?.email) {
+        setHistory([]);
+        return;
+      }
+
       try {
         const remoteHistory = await getRemoteCalculations();
+        const filteredRemoteHistory = filterByCurrentUser(remoteHistory);
 
-        if (remoteHistory.length > 0) {
-          setHistory(remoteHistory);
+        if (filteredRemoteHistory.length > 0) {
+          setHistory(filteredRemoteHistory);
           return;
         }
       } catch {
@@ -23,11 +44,15 @@ export default function History() {
       }
 
       const storedHistory = await getStoredCalculations();
-      setHistory(storedHistory);
+      setHistory(filterByCurrentUser(storedHistory));
     };
 
     loadHistory();
-  }, []);
+  }, [user?.email]);
+
+  if (loading) {
+    return null;
+  }
 
   return (
     <View style={styles.container}>

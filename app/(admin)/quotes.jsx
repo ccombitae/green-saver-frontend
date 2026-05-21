@@ -93,6 +93,16 @@ export default function Quotes() {
     return calculations.find((item) => item.id === selectedCalculationId) || null;
   }, [calculations, selectedCalculationId]);
 
+  const selectedClientEmail = selectedCalculation?.email?.toLowerCase() || "";
+
+  const visibleSentQuotes = useMemo(() => {
+    if (!selectedClientEmail) {
+      return [];
+    }
+
+    return sentQuotes.filter((quote) => quote.clientEmail?.toLowerCase() === selectedClientEmail);
+  }, [sentQuotes, selectedClientEmail]);
+
   const updateMaterialSelection = (key, value) => {
     setMaterialSelection((prev) => ({ ...prev, [key]: value }));
   };
@@ -406,10 +416,12 @@ export default function Quotes() {
 
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Cotizaciones enviadas</Text>
-        {sentQuotes.length === 0 ? (
-          <Text style={styles.emptyText}>No hay cotizaciones registradas.</Text>
+        {!selectedCalculation ? (
+          <Text style={styles.emptyText}>Selecciona un cálculo para ver solo las cotizaciones de ese cliente.</Text>
+        ) : visibleSentQuotes.length === 0 ? (
+          <Text style={styles.emptyText}>No hay cotizaciones enviadas para este cliente.</Text>
         ) : (
-          sentQuotes.slice(0, 5).map((quote) => (
+          visibleSentQuotes.slice(0, 5).map((quote) => (
             <View key={quote.id} style={styles.quoteItem}>
               <Text style={styles.quoteTitle}>{quote.clientName}</Text>
               <Text style={styles.quoteText}>{quote.clientEmail}</Text>

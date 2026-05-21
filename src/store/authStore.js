@@ -280,47 +280,51 @@ export const useAuthStore = create(
           const remoteSession = await loginRemoteUser({ email: normalizedEmail, password: normalizedPassword });
           const normalizedRemote = normalizeRemoteSession(remoteSession, normalizedEmail);
 
-          if (normalizedRemote.user.email) {
+          if (normalizedRemote.user.email && normalizedRemote.token) {
             await applySession(set, normalizedRemote);
             return normalizedRemote.user;
           }
+
+          remoteError = new Error("Respuesta de login inválida del backend: no incluyó token de sesión");
         } catch (error) {
           remoteError = error;
         }
 
-        // Si la autenticación remota falla, intentamos una sesión local (fallback).
-        try {
-          const users = await getStoredUsers();
-          const foundUser = users.find(
-            (storedUser) => storedUser.email?.toLowerCase() === normalizedEmail && storedUser.password === normalizedPassword
-          );
+        if (!isRenderBackend) {
+          // Si la autenticación remota falla en local/dev, intentamos sesión local (fallback).
+          try {
+            const users = await getStoredUsers();
+            const foundUser = users.find(
+              (storedUser) => storedUser.email?.toLowerCase() === normalizedEmail && storedUser.password === normalizedPassword
+            );
 
-          if (foundUser) {
-            const legacySession = {
-              user: buildLegacyUser(foundUser),
+            if (foundUser) {
+              const legacySession = {
+                user: buildLegacyUser(foundUser),
+                token: null,
+                refreshToken: null,
+                tokenExpiresAt: null,
+                sessionStatus: "active",
+              };
+
+              await applySession(set, legacySession);
+              return legacySession.user;
+            }
+          } catch {
+            // Ignoramos errores de almacenamiento al intentar fallback local.
+          }
+
+          // Fallback de administrador local (solo en entorno local)
+          if (normalizedEmail === ADMIN_USER.email && normalizedPassword === ADMIN_USER.password) {
+            await applySession(set, {
+              user: ADMIN_USER,
               token: null,
               refreshToken: null,
               tokenExpiresAt: null,
               sessionStatus: "active",
-            };
-
-            await applySession(set, legacySession);
-            return legacySession.user;
+            });
+            return ADMIN_USER;
           }
-        } catch {
-          // Ignoramos errores de almacenamiento al intentar fallback local.
-        }
-
-        // Fallback de administrador local (solo en entorno local, no en Render)
-        if (normalizedEmail === ADMIN_USER.email && normalizedPassword === ADMIN_USER.password && !isRenderBackend) {
-          await applySession(set, {
-            user: ADMIN_USER,
-            token: null,
-            refreshToken: null,
-            tokenExpiresAt: null,
-            sessionStatus: "active",
-          });
-          return ADMIN_USER;
         }
 
         // Si no hay fallback local, re-lanzamos el error remoto (si existe) o un mensaje genérico.
@@ -332,6 +336,7 @@ export const useAuthStore = create(
         const normalizedPassword = normalizeText(password);
         const normalizedName = normalizeText(name) || getDisplayName(normalizedEmail);
         const normalizedPhone = normalizeText(phone);
+        const isRenderBackend = typeof API_BASE_URL === "string" && API_BASE_URL.includes("onrender.com");
 
         if (!normalizedEmail || !normalizedPassword) {
           throw new Error("Correo y contraseña son obligatorios");
@@ -339,6 +344,35 @@ export const useAuthStore = create(
 
         if (getUtf8ByteLength(normalizedPassword) > 72) {
           throw new Error("La contraseña es demasiado larga. Usa una de máximo 72 bytes (aprox. 72 caracteres simples).");
+        }
+
+        if (isRenderBackend) {
+          const remoteSession = await registerRemoteAuthUser({
+            name: normalizedName,
+            phone: normalizedPhone,
+            email: normalizedEmail,
+            password: normalizedPassword,
+            role: "user",
+          });
+
+          const normalizedRemote = normalizeRemoteSession(remoteSession || {}, normalizedEmail);
+
+          if (!normalizedRemote.user.email) {
+            throw new Error("No fue posible crear la sesión en el backend");
+          }
+
+          await applySession(set, {
+            user: normalizedRemote.user,
+            token: normalizedRemote.token,
+            refreshToken: normalizedRemote.refreshToken,
+            tokenExpiresAt: normalizedRemote.tokenExpiresAt,
+            sessionStatus: "active",
+          });
+
+          return {
+            user: normalizedRemote.user,
+            warning: null,
+          };
         }
 
         const users = await getStoredUsers();

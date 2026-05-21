@@ -1,46 +1,53 @@
 import { useAuth } from "@/src/context/AuthContext";
-import { getStoredCalculations, getStoredUsers } from "@/src/services/storage";
+import { getRemoteCalculations, getRemoteSentQuotes, getRemoteUsers } from "@/src/services/backend";
 import { Colors } from "@/src/theme/colors";
 import { Redirect } from "expo-router";
 import { useEffect, useState } from "react";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, ScrollView, StyleSheet, Text, View } from "react-native";
 
 export default function Statistics() {
   const { user, loading } = useAuth();
   const [metrics, setMetrics] = useState({
     totalUsers: 0,
     totalCalculations: 0,
+    totalQuotes: 0,
     averageCoverage: 0,
     averagePanels: 0,
   });
 
   useEffect(() => {
     const loadMetrics = async () => {
-      const [users, calculations] = await Promise.all([
-        getStoredUsers(),
-        getStoredCalculations(),
-      ]);
+      try {
+        const [users, calculations, quotes] = await Promise.all([
+          getRemoteUsers(),
+          getRemoteCalculations(),
+          getRemoteSentQuotes(),
+        ]);
 
-      const coverageAverage = calculations.length
-        ? Math.round(
-            calculations.reduce((sum, item) => sum + (item.coverage || 0), 0) /
-              calculations.length,
-          )
-        : 0;
+        const coverageAverage = calculations.length
+          ? Math.round(
+              calculations.reduce((sum, item) => sum + (Number(item.coverage) || 0), 0) /
+                calculations.length,
+            )
+          : 0;
 
-      const panelsAverage = calculations.length
-        ? Math.round(
-            calculations.reduce((sum, item) => sum + (item.estimatedPanels || 0), 0) /
-              calculations.length,
-          )
-        : 0;
+        const panelsAverage = calculations.length
+          ? Math.round(
+              calculations.reduce((sum, item) => sum + (Number(item.estimatedPanels) || 0), 0) /
+                calculations.length,
+            )
+          : 0;
 
-      setMetrics({
-        totalUsers: users.length,
-        totalCalculations: calculations.length,
-        averageCoverage: coverageAverage,
-        averagePanels: panelsAverage,
-      });
+        setMetrics({
+          totalUsers: users.length,
+          totalCalculations: calculations.length,
+          totalQuotes: quotes.length,
+          averageCoverage: coverageAverage,
+          averagePanels: panelsAverage,
+        });
+      } catch (error) {
+        Alert.alert("Error", error?.message || "No fue posible cargar las métricas.");
+      }
     };
 
     if (user?.role === "admin") {
@@ -79,6 +86,11 @@ export default function Statistics() {
         <View style={styles.metricCard}>
           <Text style={styles.metricLabel}>Cobertura promedio</Text>
           <Text style={styles.metricValue}>{metrics.averageCoverage}%</Text>
+        </View>
+
+        <View style={styles.metricCard}>
+          <Text style={styles.metricLabel}>Cotizaciones</Text>
+          <Text style={styles.metricValue}>{metrics.totalQuotes}</Text>
         </View>
 
         <View style={styles.metricCard}>
