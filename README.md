@@ -105,6 +105,12 @@ $env:EXPO_PUBLIC_API_URL='https://green-saver-api.onrender.com'
 npx expo start --host lan --port 8090 --clear
 ```
 
+Si el celular no conecta por LAN, usa tunnel:
+
+```powershell
+npm run start:tunnel
+```
+
 Si `EXPO_PUBLIC_API_URL` no se define, el proyecto usa `http://localhost:8000` por defecto.
 
 ---

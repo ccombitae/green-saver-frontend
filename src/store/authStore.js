@@ -1,4 +1,4 @@
-import { apiRequest, setApiAuthTokenResolver, setApiUnauthorizedHandler } from "@/src/services/apiClient";
+import { API_BASE_URL, apiRequest, setApiAuthTokenResolver, setApiUnauthorizedHandler } from "@/src/services/apiClient";
 import { loginRemoteUser, registerRemoteAuthUser, resetRemotePassword } from "@/src/services/backend";
 import {
     clearStoredCurrentUser,
@@ -191,7 +191,7 @@ const applySession = async (set, session) => {
   return nextSession;
 };
 
-export const getRoleHomeRoute = (role) => (role === "admin" ? "/(admin)/dashboard" : "/(user)/(tabs)");
+export const getRoleHomeRoute = (role) => (role === "admin" ? "/(admin)/dashboard" : "/(user)/dashboard");
 
 export const useAuthStore = create(
   persist(
@@ -210,6 +210,11 @@ export const useAuthStore = create(
           await useAuthStore.persist.rehydrate();
 
           const current = get();
+          const isRenderBackend = typeof API_BASE_URL === "string" && API_BASE_URL.includes("onrender.com");
+
+          if (isRenderBackend && current.user && !current.token) {
+            await get().logout({ silent: true });
+          }
 
           if (current.user && current.token && current.tokenExpiresAt && isTokenExpired(current.tokenExpiresAt)) {
             if (current.refreshToken) {
@@ -221,7 +226,7 @@ export const useAuthStore = create(
 
           const nextState = get();
 
-          if (!nextState.user) {
+          if (!nextState.user && !isRenderBackend) {
             const legacyUser = await getStoredCurrentUser();
 
             if (legacyUser) {
@@ -263,6 +268,7 @@ export const useAuthStore = create(
       login: async (email, password) => {
         const normalizedEmail = normalizeText(email).toLowerCase();
         const normalizedPassword = normalizeText(password);
+        const isRenderBackend = typeof API_BASE_URL === "string" && API_BASE_URL.includes("onrender.com");
 
         if (!normalizedEmail || !normalizedPassword) {
           throw new Error("Correo y contraseña son obligatorios");
@@ -282,7 +288,31 @@ export const useAuthStore = create(
           remoteError = error;
         }
 
-        if (normalizedEmail === ADMIN_USER.email && normalizedPassword === ADMIN_USER.password) {
+        // Si la autenticación remota falla, intentamos una sesión local (fallback).
+        try {
+          const users = await getStoredUsers();
+          const foundUser = users.find(
+            (storedUser) => storedUser.email?.toLowerCase() === normalizedEmail && storedUser.password === normalizedPassword
+          );
+
+          if (foundUser) {
+            const legacySession = {
+              user: buildLegacyUser(foundUser),
+              token: null,
+              refreshToken: null,
+              tokenExpiresAt: null,
+              sessionStatus: "active",
+            };
+
+            await applySession(set, legacySession);
+            return legacySession.user;
+          }
+        } catch {
+          // Ignoramos errores de almacenamiento al intentar fallback local.
+        }
+
+        // Fallback de administrador local (solo en entorno local, no en Render)
+        if (normalizedEmail === ADMIN_USER.email && normalizedPassword === ADMIN_USER.password && !isRenderBackend) {
           await applySession(set, {
             user: ADMIN_USER,
             token: null,
@@ -293,25 +323,8 @@ export const useAuthStore = create(
           return ADMIN_USER;
         }
 
-        const users = await getStoredUsers();
-        const foundUser = users.find(
-          (storedUser) => storedUser.email?.toLowerCase() === normalizedEmail && storedUser.password === normalizedPassword
-        );
-
-        if (!foundUser) {
-          throw new Error(remoteError?.message || "Credenciales incorrectas");
-        }
-
-        const legacySession = {
-          user: buildLegacyUser(foundUser),
-          token: null,
-          refreshToken: null,
-          tokenExpiresAt: null,
-          sessionStatus: "active",
-        };
-
-        await applySession(set, legacySession);
-        return legacySession.user;
+        // Si no hay fallback local, re-lanzamos el error remoto (si existe) o un mensaje genérico.
+        throw remoteError || new Error("Credenciales incorrectas");
       },
 
       register: async ({ email, password, name, phone }) => {
@@ -367,6 +380,18 @@ export const useAuthStore = create(
           });
         } catch (error) {
           syncWarning = `Registro guardado localmente. El backend no respondió: ${error?.message || "verifica EXPO_PUBLIC_API_URL y conectividad"}`;
+          // Aplicar sesión local inmediatamente para que el usuario quede autenticado localmente
+          try {
+            await applySession(set, {
+              user: buildLegacyUser(newUser),
+              token: null,
+              refreshToken: null,
+              tokenExpiresAt: null,
+              sessionStatus: "active",
+            });
+          } catch {
+            // Ignorar fallos al aplicar la sesión local
+          }
         }
 
         return {

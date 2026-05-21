@@ -1,3 +1,4 @@
+import NavigationShell from "@/src/components/navigation-shell";
 import { useAuth } from "@/src/context/AuthContext";
 import { Redirect, Slot } from "expo-router";
 
@@ -16,5 +17,13 @@ export default function UserLayout() {
     return <Redirect href="/(admin)/dashboard" />;
   }
 
-  return <Slot />;
+  return (
+    <NavigationShell
+      title="GREEN SAVER"
+      rootPaths={["/dashboard"]}
+      backgroundColor={"#F7FAF8"}
+    >
+      <Slot />
+    </NavigationShell>
+  );
 }

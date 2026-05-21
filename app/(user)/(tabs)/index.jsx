@@ -110,7 +110,7 @@ export default function Home() {
 
         <Pressable
           style={({ pressed }) => [styles.installedButton, pressed && styles.buttonPressed]}
-          onPress={() => router.push("/installed-system")}
+            onPress={() => router.push("/installed-system")}
         >
           <Text style={styles.installedButtonText}>Mi sistema instalado</Text>
         </Pressable>

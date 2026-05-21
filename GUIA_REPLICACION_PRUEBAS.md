@@ -343,4 +343,11 @@ La aplicación GREEN SAVER implementa correctamente **Control de Acceso Basado e
 
 *Documento creado: 2026-05-11*  
 *Aplicación: GREEN SAVER v1.0.0*  
-*Framework: Expo Router + React Native + Zustand*
+*Framework: Expo Router + React Native + Zustand* 
+
+
+
+navigation shell }
+if navigatión_shell 
+  went open of shell tours from pack of the shell.txt
+  elif go to the sumer 

@@ -3,7 +3,7 @@ import { Colors } from "@/src/theme/colors";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
     Alert,
     Animated,
@@ -23,6 +23,42 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [monthly, setMonthly] = useState("");
+  const [showQuickCalc, setShowQuickCalc] = useState(false);
+
+  const monthlyNumber = useMemo(() => {
+    const n = Number(monthly);
+    return Number.isFinite(n) ? n : 0;
+  }, [monthly]);
+
+  const panelsEstimate = useMemo(() => {
+    // estimación simple: consumo diario = mensual / 30, salida diaria por panel ~4 kWh
+    if (!monthlyNumber || monthlyNumber <= 0) return "-";
+    const daily = monthlyNumber / 30;
+    const panels = Math.max(1, Math.ceil(daily / 4));
+    return String(panels);
+  }, [monthlyNumber]);
+
+  const estimateBase = useMemo(() => {
+    if (!monthlyNumber || monthlyNumber <= 0) return null;
+
+    const daily = monthlyNumber / 30;
+    const kWp = Math.max(0.5, +(daily / 4).toFixed(2));
+
+    let inverter = "Inversor Hibrido 3kW";
+    if (kWp > 3 && kWp <= 5) {
+      inverter = "Inversor Hibrido 5kW";
+    } else if (kWp > 5 && kWp <= 8) {
+      inverter = "Inversor Hibrido 8kW";
+    } else if (kWp > 8) {
+      inverter = "Inversor Hibrido 10kW";
+    }
+
+    return {
+      kWp: `${kWp} kWp`,
+      inverter,
+    };
+  }, [monthlyNumber]);
 
   useEffect(() => {
     Animated.parallel([
@@ -63,9 +99,53 @@ export default function Login() {
         <Text style={styles.kicker}>Solar inteligente</Text>
         <Text style={styles.title}>GREEN SAVER</Text>
         <Text style={styles.subtitle}>
-          Accede como usuario o administrador según tu perfil.
+          Ahorra energía y dinero: calcula tu sistema solar, recibe cotizaciones y gestiona instalaciones en minutos.
         </Text>
       </View>
+
+      <Animated.View
+        style={{
+          opacity: entryOpacity,
+          transform: [{ translateY: entryTranslateY }],
+        }}
+      >
+        <Pressable
+          onPress={() => {
+            handleHapticPress();
+            setShowQuickCalc((s) => !s);
+          }}
+          style={({ pressed }) => [styles.quickButton, pressed && styles.buttonPressed]}
+        >
+          <Text style={styles.primaryButtonText}>{showQuickCalc ? "Cerrar cálculo rápido" : "Cálculo rápido"}</Text>
+        </Pressable>
+
+        {showQuickCalc ? (
+          <View style={styles.quickCalcCard}>
+            <Text style={styles.demoTitle}>Cálculo rápido (sin registro)</Text>
+            <Text style={styles.helperText}>Realiza un cálculo básico para ver estimaciones sin guardar datos.</Text>
+
+            <View style={styles.inputGroupSmall}>
+              <TextInput
+                placeholder="Consumo mensual (kWh)"
+                placeholderTextColor={Colors.gray}
+                style={styles.input}
+                keyboardType="numeric"
+                value={monthly}
+                onChangeText={(v) => setMonthly(v.replace(/[^0-9.]/g, ""))}
+              />
+            </View>
+
+            <View style={styles.calcResultRow}>
+              <Text style={styles.calcLabel}>Paneles estimados:</Text>
+              <Text style={styles.calcValue}>{panelsEstimate}</Text>
+            </View>
+            <View style={styles.calcResultRow}>
+              <Text style={styles.calcLabel}>Inversor recomendado:</Text>
+              <Text style={styles.calcValue}>{estimateBase?.inverter || "-"}</Text>
+            </View>
+          </View>
+        ) : null}
+      </Animated.View>
 
       <Animated.View
         style={[
@@ -138,20 +218,6 @@ export default function Login() {
           <Text style={styles.linkMuted}>Recuperar contraseña</Text>
         </Pressable>
       </Animated.View>
-
-      <Animated.View
-        style={[
-          styles.demoCard,
-          {
-            opacity: entryOpacity,
-            transform: [{ translateY: entryTranslateY }],
-          },
-        ]}
-      >
-        <Text style={styles.demoTitle}>Credenciales de prueba</Text>
-        <Text style={styles.demoText}>Usuario: user@greensaver.com / 1234</Text>
-        <Text style={styles.demoText}>Admin: admin@greensaver.com / admin</Text>
-      </Animated.View>
     </View>
   );
 }
@@ -162,7 +228,8 @@ const styles = StyleSheet.create({
     gap: 16,
     backgroundColor: Colors.background,
     padding: 30,
-    justifyContent: "center",
+    justifyContent: "flex-start",
+    paddingTop: 36,
     overflow: "hidden",
   },
   backgroundGlowOne: {
@@ -310,5 +377,40 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Colors.gray,
     marginTop: 2,
+  },
+  quickCalcCard: {
+    backgroundColor: "rgba(255,255,255,0.96)",
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "#E4EEE8",
+    padding: 16,
+    gap: 8,
+  },
+  quickButton: {
+    backgroundColor: Colors.primary,
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  inputGroupSmall: {
+    backgroundColor: "#F6F8F7",
+    borderColor: "#DCE7E1",
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 10,
+  },
+  calcResultRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 8,
+  },
+  calcLabel: {
+    color: Colors.dark,
+    fontWeight: "700",
+  },
+  calcValue: {
+    color: Colors.primary,
+    fontWeight: "700",
   },
 });

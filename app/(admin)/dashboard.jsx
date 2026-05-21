@@ -23,7 +23,7 @@ export default function AdminDashboard() {
   }
 
   if (user.role !== "admin") {
-    return <Redirect href="/(user)/(tabs)" />;
+    return <Redirect href="/(user)/dashboard" />;
   }
 
   return (
@@ -71,7 +71,7 @@ export default function AdminDashboard() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#0F1F16",
+    backgroundColor: "#F6FCF8",
     overflow: "hidden",
   },
   content: {
@@ -100,14 +100,14 @@ const styles = StyleSheet.create({
     left: -90,
   },
   heroCard: {
-    backgroundColor: "rgba(23, 49, 37, 0.96)",
+    backgroundColor: "rgba(255, 255, 255, 0.96)",
     borderRadius: 24,
     padding: 20,
     borderWidth: 1,
-    borderColor: "#29543F",
+    borderColor: "#E0EEE4",
   },
   kicker: {
-    color: "#C6E7D5",
+    color: Colors.gray,
     textTransform: "uppercase",
     letterSpacing: 1.1,
     fontSize: 12,
@@ -115,23 +115,23 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 28,
-    color: Colors.surface,
+    color: Colors.primary,
     fontWeight: "700",
     marginBottom: 8,
   },
   text: {
-    color: "#D7E5DB",
+    color: Colors.dark,
     lineHeight: 22,
   },
   grid: {
     gap: 12,
   },
   actionCard: {
-    backgroundColor: "rgba(255,255,255,0.96)",
+    backgroundColor: "rgba(255,255,255,0.98)",
     borderRadius: 20,
     padding: 18,
     borderWidth: 1,
-    borderColor: "#2B503D",
+    borderColor: "#E0EEE4",
   },
   actionTitle: {
     fontSize: 18,
@@ -144,21 +144,21 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   sessionCard: {
-    backgroundColor: "rgba(21, 49, 36, 0.96)",
+    backgroundColor: "rgba(255,255,255,0.96)",
     padding: 16,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: "#2B503D",
+    borderColor: "#E0EEE4",
   },
   sessionLabel: {
-    color: "#BFD2C5",
+    color: Colors.gray,
     fontSize: 12,
     textTransform: "uppercase",
     letterSpacing: 1,
     marginBottom: 6,
   },
   sessionValue: {
-    color: Colors.surface,
+    color: Colors.dark,
     fontWeight: "600",
   },
   logoutButton: {

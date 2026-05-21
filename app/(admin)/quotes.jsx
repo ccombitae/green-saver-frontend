@@ -1,16 +1,19 @@
 import { useAuth } from "@/src/context/AuthContext";
 import {
+    acceptRemoteQuote,
     getRemoteQuoteCalculations,
     getRemoteQuoteOptions,
     getRemoteSentQuotes,
     sendRemoteQuote,
 } from "@/src/services/backend";
 import { Colors } from "@/src/theme/colors";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import { Redirect } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
     ActivityIndicator,
     Alert,
+    Modal,
     Pressable,
     ScrollView,
     StyleSheet,
@@ -24,7 +27,11 @@ export default function Quotes() {
   const [selectedCalculationId, setSelectedCalculationId] = useState("");
   const [price, setPrice] = useState("");
   const [notes, setNotes] = useState("");
+  const [acceptingQuote, setAcceptingQuote] = useState(null);
+  const [acceptInstallDate, setAcceptInstallDate] = useState(new Date());
   const [calculations, setCalculations] = useState([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 8;
   const [sentQuotes, setSentQuotes] = useState([]);
   const [quoteOptions, setQuoteOptions] = useState({
     panelTypes: [],
@@ -40,6 +47,7 @@ export default function Quotes() {
   });
   const [isBootstrapping, setIsBootstrapping] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const [isAccepting, setIsAccepting] = useState(false);
 
   useEffect(() => {
     const loadData = async () => {
@@ -52,7 +60,14 @@ export default function Quotes() {
           getRemoteSentQuotes(),
         ]);
 
-        setCalculations(remoteCalculations);
+        // ordenar por fecha (desc) y almacenar
+        const sorted = (remoteCalculations || []).slice().sort((a, b) => {
+          const da = new Date(a.createdAt || a.date || 0).getTime();
+          const db = new Date(b.createdAt || b.date || 0).getTime();
+          return db - da;
+        });
+
+        setCalculations(sorted);
         setQuoteOptions(remoteOptions);
         setSentQuotes(remoteQuotes);
 
@@ -113,6 +128,18 @@ export default function Quotes() {
     return `USD ${numeric.toFixed(2)}`;
   };
 
+  const formatInstallDate = (value) => {
+    if (!(value instanceof Date) || Number.isNaN(value.getTime())) {
+      return "Selecciona una fecha";
+    }
+
+    return new Intl.DateTimeFormat("es-ES", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    }).format(value);
+  };
+
   const handleSendQuote = async () => {
     if (!selectedCalculation || !price || !allMaterialsSelected) {
       Alert.alert(
@@ -131,7 +158,7 @@ export default function Quotes() {
     setIsSending(true);
 
     try {
-      await sendRemoteQuote({
+      const response = await sendRemoteQuote({
         calculationId: selectedCalculation.id,
         clientEmail: selectedCalculation.email,
         clientName: selectedCalculation.clientName,
@@ -140,6 +167,10 @@ export default function Quotes() {
         materials: materialSelection,
       });
 
+      if (response?.success === false) {
+        throw new Error(response?.message || "No se pudo enviar la cotización.");
+      }
+
       const refreshedQuotes = await getRemoteSentQuotes();
       setSentQuotes(refreshedQuotes);
       setPrice("");
@@ -147,9 +178,46 @@ export default function Quotes() {
 
       Alert.alert("Cotización enviada", "La propuesta fue enviada por correo y guardada.");
     } catch (error) {
+      console.error("QUOTE_SEND_ERROR", error);
       Alert.alert("Error", error.message || "No se pudo enviar la cotización.");
     } finally {
       setIsSending(false);
+    }
+  };
+
+  const handleOpenAcceptQuote = (quote) => {
+    setAcceptingQuote(quote);
+    setAcceptInstallDate(new Date());
+  };
+
+  const handleAcceptQuote = async () => {
+    if (!acceptingQuote) {
+      return;
+    }
+
+    if (!(acceptInstallDate instanceof Date) || Number.isNaN(acceptInstallDate.getTime())) {
+      Alert.alert("Fecha requerida", "Ingresa la fecha de instalación para continuar.");
+      return;
+    }
+
+    setIsAccepting(true);
+
+    try {
+      await acceptRemoteQuote({
+        quoteId: acceptingQuote.id,
+        installDate: acceptInstallDate.toISOString().slice(0, 10),
+      });
+
+      const refreshedQuotes = await getRemoteSentQuotes();
+      setSentQuotes(refreshedQuotes);
+      setAcceptingQuote(null);
+      setAcceptInstallDate(new Date());
+
+      Alert.alert("Cotización aceptada", "El sistema quedó guardado automáticamente en el cliente.");
+    } catch (error) {
+      Alert.alert("Error", error.message || "No se pudo aceptar la cotización.");
+    } finally {
+      setIsAccepting(false);
     }
   };
 
@@ -159,7 +227,7 @@ export default function Quotes() {
 
   if (!user) return <Redirect href="/login" />;
 
-  if (user.role !== "admin") return <Redirect href="/(user)/(tabs)" />;
+  if (user.role !== "admin") return <Redirect href="/(user)/dashboard" />;
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -182,7 +250,7 @@ export default function Quotes() {
         ) : calculations.length === 0 ? (
           <Text style={styles.emptyText}>Aún no hay cálculos listos para cotizar.</Text>
         ) : (
-          calculations.map((calc) => (
+          calculations.slice((currentPage - 1) * pageSize, currentPage * pageSize).map((calc) => (
             <Pressable
               key={calc.id}
               style={[
@@ -200,6 +268,29 @@ export default function Quotes() {
             </Pressable>
           ))
         )}
+      </View>
+
+      <View style={styles.paginationRow}>
+        <Pressable
+          style={[styles.pageButton, currentPage === 1 && styles.pageButtonDisabled]}
+          disabled={currentPage === 1}
+          onPress={() => setCurrentPage((p) => Math.max(1, p - 1))}
+        >
+          <Text style={styles.pageButtonText}>Anterior</Text>
+        </Pressable>
+
+        <Text style={{ alignSelf: "center", color: Colors.gray }}>Página {currentPage}</Text>
+
+        <Pressable
+          style={[
+            styles.pageButton,
+            currentPage * pageSize >= calculations.length && styles.pageButtonDisabled,
+          ]}
+          disabled={currentPage * pageSize >= calculations.length}
+          onPress={() => setCurrentPage((p) => p + 1)}
+        >
+          <Text style={styles.pageButtonText}>Siguiente</Text>
+        </Pressable>
       </View>
 
       <View style={styles.card}>
@@ -325,10 +416,75 @@ export default function Quotes() {
               <Text style={styles.quoteText}>Cálculo #{quote.calculationId}</Text>
               <Text style={styles.quoteText}>Precio: {formatCurrency(quote.totalPrice)}</Text>
               <Text style={styles.quoteStatus}>{quote.status} - {formatDate(quote.sentAt)}</Text>
+              {quote.installationDate ? (
+                <Text style={styles.quoteText}>Instalación: {quote.installationDate}</Text>
+              ) : null}
+
+              <Pressable
+                style={[
+                  styles.acceptButton,
+                  quote.status === "accepted" && styles.acceptButtonDisabled,
+                ]}
+                disabled={quote.status === "accepted"}
+                onPress={() => handleOpenAcceptQuote(quote)}
+              >
+                <Text style={styles.acceptButtonText}>
+                  {quote.status === "accepted" ? "Aceptada" : "Aceptar cotización"}
+                </Text>
+              </Pressable>
             </View>
           ))
         )}
       </View>
+
+      <Modal
+        visible={Boolean(acceptingQuote)}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setAcceptingQuote(null)}
+      >
+        <View style={styles.modalBackdrop}>
+          <Pressable
+            style={StyleSheet.absoluteFillObject}
+            onPress={() => setAcceptingQuote(null)}
+          />
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Aceptar cotización</Text>
+            <Text style={styles.modalSubtitle}>
+              {acceptingQuote ? `${acceptingQuote.clientName} · ${acceptingQuote.clientEmail}` : ""}
+            </Text>
+
+            <View style={styles.datePickerBox}>
+              <Text style={styles.datePickerLabel}>Fecha de instalación</Text>
+              <DateTimePicker
+                value={acceptInstallDate}
+                mode="date"
+                display="default"
+                onChange={(_, selectedDate) => {
+                  if (selectedDate) {
+                    setAcceptInstallDate(selectedDate);
+                  }
+                }}
+              />
+              <Text style={styles.datePickerValue}>{formatInstallDate(acceptInstallDate)}</Text>
+            </View>
+
+            <Pressable
+              style={[styles.primaryButton, isAccepting && styles.primaryButtonDisabled]}
+              onPress={handleAcceptQuote}
+              disabled={isAccepting}
+            >
+              <Text style={styles.primaryButtonText}>
+                {isAccepting ? "Guardando..." : "Confirmar y guardar sistema"}
+              </Text>
+            </Pressable>
+
+            <Pressable style={styles.cancelButton} onPress={() => setAcceptingQuote(null)}>
+              <Text style={styles.cancelButtonText}>Cancelar</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -488,6 +644,19 @@ const styles = StyleSheet.create({
     color: Colors.surface,
     fontWeight: "700",
   },
+  refreshQuotesButton: {
+    marginTop: 8,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#DCE7E1",
+    paddingVertical: 12,
+    alignItems: "center",
+  },
+  refreshQuotesText: {
+    color: Colors.primary,
+    fontWeight: "700",
+  },
   emptyText: {
     color: Colors.gray,
   },
@@ -508,6 +677,89 @@ const styles = StyleSheet.create({
   quoteStatus: {
     marginTop: 4,
     color: Colors.primary,
+    fontWeight: "700",
+  },
+  acceptButton: {
+    marginTop: 8,
+    backgroundColor: Colors.primary,
+    borderRadius: 12,
+    paddingVertical: 10,
+    alignItems: "center",
+  },
+  acceptButtonDisabled: {
+    opacity: 0.7,
+  },
+  acceptButtonText: {
+    color: Colors.surface,
+    fontWeight: "700",
+  },
+  paginationRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 12,
+    paddingHorizontal: 6,
+  },
+  pageButton: {
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.primary,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  pageButtonDisabled: {
+    opacity: 0.5,
+  },
+  pageButtonText: {
+    color: Colors.primary,
+    fontWeight: "700",
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.35)",
+    justifyContent: "center",
+    padding: 20,
+  },
+  modalCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: 20,
+    padding: 18,
+    gap: 12,
+  },
+  modalTitle: {
+    color: Colors.dark,
+    fontSize: 18,
+    fontWeight: "700",
+  },
+  modalSubtitle: {
+    color: Colors.gray,
+  },
+  datePickerBox: {
+    gap: 10,
+    backgroundColor: "#F7FAF8",
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: "#DDE9E3",
+  },
+  datePickerLabel: {
+    color: Colors.dark,
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  datePickerValue: {
+    color: Colors.gray,
+    fontSize: 13,
+  },
+  cancelButton: {
+    backgroundColor: "#F2F4F3",
+    paddingVertical: 12,
+    borderRadius: 14,
+    alignItems: "center",
+  },
+  cancelButtonText: {
+    color: Colors.dark,
     fontWeight: "700",
   },
 });

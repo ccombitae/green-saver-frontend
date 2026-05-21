@@ -147,6 +147,8 @@ const mapSentQuote = (item) => ({
   totalPrice: Number(item?.total_price ?? item?.totalPrice ?? 0),
   status: item?.status || "sent",
   sentAt: item?.sent_at ?? item?.sentAt ?? "",
+  acceptedAt: item?.accepted_at ?? item?.acceptedAt ?? "",
+  installationDate: item?.installation_date ?? item?.installationDate ?? "",
 });
 
 export const getRemoteQuoteCalculations = async () => {
@@ -190,4 +192,43 @@ export const sendRemoteQuote = async ({
       materials,
     },
   });
+};
+
+export const acceptRemoteQuote = async ({ quoteId, installDate }) => {
+  return apiRequest(`/quotes/${Number(quoteId)}/accept`, {
+    method: "POST",
+    body: { installDate },
+  });
+};
+
+const mapRemoteUser = (item) => ({
+  id: Number(item?.id ?? 0),
+  name: item?.nombre ?? item?.name ?? item?.email ?? "Usuario",
+  email: item?.email ?? "",
+  role: item?.rol ?? item?.role ?? "user",
+  city: item?.ciudad ?? item?.city ?? "",
+  consumption: item?.consumo_mensual ?? item?.consumption ?? 0,
+});
+
+export const getRemoteUsers = async () => {
+  const response = await apiRequest("/usuarios");
+  return extractDataArray(response).map(mapRemoteUser);
+};
+
+export const deleteRemoteUser = async (userId) => {
+  return apiRequest(`/usuarios/${Number(userId)}`, {
+    method: "DELETE",
+  });
+};
+
+export const assignRemoteSystemToUser = async ({ email, system }) => {
+  return apiRequest("/systems/assign", {
+    method: "POST",
+    body: { email, system },
+  });
+};
+
+export const getRemoteInstalledSystems = async (email) => {
+  const response = await apiRequest("/systems", { query: { email } });
+  return extractDataArray(response);
 };

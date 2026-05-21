@@ -11,5 +11,5 @@ export default function Index() {
   if (user.role === "admin")
     return <Redirect href="/(admin)/dashboard" />;
 
-  return <Redirect href="/(user)/(tabs)" />;
+  return <Redirect href="/(user)/dashboard" />;
 }

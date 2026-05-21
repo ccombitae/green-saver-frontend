@@ -1,4 +1,7 @@
+import { useAuth } from "@/src/context/AuthContext";
+import { getRemoteInstalledSystems } from "@/src/services/backend";
 import { Colors } from "@/src/theme/colors";
+import { useEffect, useState } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 
 const maintenanceTasks = [
@@ -23,6 +26,29 @@ const maintenanceTasks = [
 ];
 
 export default function InstalledSystem() {
+  const { user, loading } = useAuth();
+  const [systems, setSystems] = useState([]);
+
+  useEffect(() => {
+    const load = async () => {
+      if (!user?.email) return;
+      try {
+        const remote = await getRemoteInstalledSystems(user.email);
+        if (Array.isArray(remote) && remote.length > 0) {
+          setSystems(remote);
+          return;
+        }
+      } catch {
+        // ignore — keep demo data
+      }
+    };
+
+    load();
+  }, [user?.email]);
+
+  if (loading) {
+    return null;
+  }
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <View style={styles.glowOne} />
@@ -36,32 +62,42 @@ export default function InstalledSystem() {
 
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Datos del cliente</Text>
-        <Text style={styles.cardText}>Nombre: Carlos Ramírez</Text>
-        <Text style={styles.cardText}>Ciudad: San Salvador</Text>
-        <Text style={styles.cardText}>Vivienda: Residencial El Bosque</Text>
+        <Text style={styles.cardText}>Nombre: {user?.name || "Cliente"}</Text>
+        <Text style={styles.cardText}>Correo: {user?.email || "-"}</Text>
       </View>
 
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Sistema vendido</Text>
-        <Text style={styles.cardText}>Capacidad: 4.5 kWp</Text>
-        <Text style={styles.cardText}>Paneles: 10 módulos de 450W</Text>
-        <Text style={styles.cardText}>Inversor: 5 kW híbrido</Text>
-        <Text style={styles.cardText}>Batería: 10 kWh litio</Text>
-        <Text style={styles.cardText}>Fecha de instalación: 15 feb 2026</Text>
-      </View>
-
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Mantenimiento preventivo</Text>
-        {maintenanceTasks.map((item) => (
-          <View key={item.id} style={styles.taskItem}>
-            <View>
-              <Text style={styles.taskMonth}>{item.month}</Text>
-              <Text style={styles.taskText}>{item.task}</Text>
-            </View>
-            <Text style={styles.taskStatus}>{item.status}</Text>
+      {systems && systems.length > 0 ? (
+        systems.map((s, idx) => (
+          <View key={s.id || idx} style={styles.card}>
+            <Text style={styles.cardTitle}>Sistema vendido</Text>
+            <Text style={styles.cardText}>Capacidad: {s.capacity ?? "-"}</Text>
+            <Text style={styles.cardText}>Paneles: {s.panels ?? "-"}</Text>
+            <Text style={styles.cardText}>Inversor: {s.inverter ?? "-"}</Text>
+            <Text style={styles.cardText}>Batería: {s.battery ?? "-"}</Text>
+            <Text style={styles.cardText}>Fecha de instalación: {s.installDate ?? "-"}</Text>
           </View>
-        ))}
-      </View>
+        ))
+      ) : (
+        <View style={styles.emptyCard}>
+          <Text style={styles.cardTitle}>Aún no tienes un sistema asignado</Text>
+          <Text style={styles.cardText}>Cuando el administrador acepte tu cotización, aparecerá aquí automáticamente.</Text>
+        </View>
+      )}
+
+      {systems && systems.length > 0 ? (
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Mantenimiento preventivo</Text>
+          {maintenanceTasks.map((item) => (
+            <View key={item.id} style={styles.taskItem}>
+              <View>
+                <Text style={styles.taskMonth}>{item.month}</Text>
+                <Text style={styles.taskText}>{item.task}</Text>
+              </View>
+              <Text style={styles.taskStatus}>{item.status}</Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
     </ScrollView>
   );
 }
@@ -136,6 +172,14 @@ const styles = StyleSheet.create({
   },
   cardText: {
     color: Colors.gray,
+  },
+  emptyCard: {
+    backgroundColor: "rgba(255,255,255,0.94)",
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "#E4EEE8",
+    padding: 18,
+    gap: 6,
   },
   taskItem: {
     borderWidth: 1,

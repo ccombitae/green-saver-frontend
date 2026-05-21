@@ -52,7 +52,7 @@ export default function Statistics() {
 
   if (!user) return <Redirect href="/login" />;
 
-  if (user.role !== "admin") return <Redirect href="/(user)/(tabs)" />;
+  if (user.role !== "admin") return <Redirect href="/(user)/dashboard" />;
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>

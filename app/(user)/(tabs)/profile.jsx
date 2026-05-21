@@ -36,7 +36,7 @@ export default function Profile() {
         <Pressable onPress={() => router.push("/info")}>
           <Text style={styles.link}>Explorar información solar</Text>
         </Pressable>
-        <Pressable onPress={() => router.push("/installed-system")}>
+        <Pressable onPress={() => router.push("/installed-system") }>
           <Text style={styles.link}>Mi sistema instalado</Text>
         </Pressable>
         <Pressable style={styles.logoutButton} onPress={handleLogout}>
