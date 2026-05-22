@@ -1,3 +1,7 @@
+// Cliente HTTP centralizado usado por la aplicación.
+// - Construye URLs relativas a `API_BASE_URL`.
+// - Añade la cabecera `Authorization: Bearer <token>` si el resolver proporciona un token.
+// - Normaliza errores y delega manejo de 401/403 al `unauthorizedHandler`.
 const DEFAULT_API_BASE_URL = "https://green-saver-api.onrender.com";
 let authTokenResolver = () => null;
 let unauthorizedHandler = null;
@@ -33,6 +37,7 @@ const withQueryParams = (path, query = {}) => {
 };
 
 const parseResponse = async (response) => {
+  // Intenta parsear respuesta como JSON; si no es JSON devuelve texto.
   const text = await response.text();
 
   if (!text) {
@@ -47,6 +52,8 @@ const parseResponse = async (response) => {
 };
 
 const normalizeErrorMessage = (data, status) => {
+  // Extrae un mensaje legible de la respuesta del servidor, soportando
+  // distintos formatos: string, { detail }, { message }, o arrays de errores.
   if (typeof data === "string" && data.trim()) {
     return data;
   }
@@ -102,6 +109,8 @@ export const apiRequest = async (path, { method = "GET", query, body, headers = 
   const data = await parseResponse(response);
 
   if (!response.ok) {
+    // Si el servidor responde 401/403 podemos delegar en un handler que
+    // normalmente realizará logout forzado o redirección.
     if ([401, 403].includes(response.status) && unauthorizedHandler) {
       await unauthorizedHandler({ path, status: response.status, data });
     }

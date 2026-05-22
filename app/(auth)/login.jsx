@@ -1,3 +1,5 @@
+// Pantalla de login y cálculo rápido utilizada en la sustentación.
+// Comentarios añadidos para señalar puntos donde mostrar token/flujo de sesión.
 import { useAuth } from "@/src/context/AuthContext";
 import { Colors } from "@/src/theme/colors";
 import { Ionicons } from "@expo/vector-icons";
@@ -5,13 +7,17 @@ import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-    Alert,
-    Animated,
-    Pressable,
-    StyleSheet,
-    Text,
-    TextInput,
-    View,
+  Alert,
+  Animated,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from "react-native";
 
 export default function Login() {
@@ -80,6 +86,9 @@ export default function Login() {
   };
 
   const handleLogin = async () => {
+    // Llamada al store de autenticación. Si el backend responde con token,
+    // `login` guarda la sesión y el router redirige. En caso de error se muestra
+    // una alerta con el mensaje (puede ser 401/credenciales incorrectas).
     try {
       await login(email, password);
       router.replace("/");
@@ -89,136 +98,157 @@ export default function Login() {
   };
 
   return (
-    <View style={styles.container}>
+    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <View style={styles.backgroundGlowOne} />
       <View style={styles.backgroundGlowTwo} />
       <View style={styles.backgroundTextureOne} />
       <View style={styles.backgroundTextureTwo} />
 
-      <View style={styles.heroCard}>
-        <Text style={styles.kicker}>Solar inteligente</Text>
-        <Text style={styles.title}>GREEN SAVER</Text>
-        <Text style={styles.subtitle}>
-          Ahorra energía y dinero: calcula tu sistema solar, recibe cotizaciones y gestiona instalaciones en minutos.
-        </Text>
-      </View>
-
-      <Animated.View
-        style={{
-          opacity: entryOpacity,
-          transform: [{ translateY: entryTranslateY }],
-        }}
+      <ScrollView
+        style={styles.scrollArea}
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
       >
-        <Pressable
-          onPress={() => {
-            handleHapticPress();
-            setShowQuickCalc((s) => !s);
-          }}
-          style={({ pressed }) => [styles.quickButton, pressed && styles.buttonPressed]}
-        >
-          <Text style={styles.primaryButtonText}>{showQuickCalc ? "Cerrar cálculo rápido" : "Cálculo rápido"}</Text>
-        </Pressable>
+        <View style={styles.heroCard}>
+          <Text style={styles.kicker}>Solar inteligente</Text>
+          <Text style={styles.title}>GREEN SAVER</Text>
+          <Text style={styles.subtitle}>
+            Ahorra energía y dinero: calcula tu sistema solar, recibe cotizaciones y gestiona instalaciones en minutos.
+          </Text>
+        </View>
 
-        {showQuickCalc ? (
-          <View style={styles.quickCalcCard}>
-            <Text style={styles.demoTitle}>Cálculo rápido (sin registro)</Text>
-            <Text style={styles.helperText}>Realiza un cálculo básico para ver estimaciones sin guardar datos.</Text>
-
-            <View style={styles.inputGroupSmall}>
-              <TextInput
-                placeholder="Consumo mensual (kWh)"
-                placeholderTextColor={Colors.gray}
-                style={styles.input}
-                keyboardType="numeric"
-                value={monthly}
-                onChangeText={(v) => setMonthly(v.replace(/[^0-9.]/g, ""))}
-              />
-            </View>
-
-            <View style={styles.calcResultRow}>
-              <Text style={styles.calcLabel}>Paneles estimados:</Text>
-              <Text style={styles.calcValue}>{panelsEstimate}</Text>
-            </View>
-            <View style={styles.calcResultRow}>
-              <Text style={styles.calcLabel}>Inversor recomendado:</Text>
-              <Text style={styles.calcValue}>{estimateBase?.inverter || "-"}</Text>
-            </View>
-          </View>
-        ) : null}
-      </Animated.View>
-
-      <Animated.View
-        style={[
-          styles.formCard,
-          {
+        <Animated.View
+          style={{
             opacity: entryOpacity,
             transform: [{ translateY: entryTranslateY }],
-          },
-        ]}
-      >
-        <Text style={styles.formTitle}>Iniciar sesión</Text>
-        <Text style={styles.helperText}>
-          Usa tu correo y contraseña para entrar al panel correspondiente.
-        </Text>
-
-        <View style={styles.inputGroup}>
-          <Ionicons name="mail-outline" size={18} color={Colors.gray} style={styles.inputIcon} />
-          <TextInput
-            placeholder="Correo"
-            placeholderTextColor={Colors.gray}
-            style={styles.input}
-            value={email}
-            onChangeText={setEmail}
-            autoCapitalize="none"
-            keyboardType="email-address"
-          />
-        </View>
-
-        <View style={styles.inputGroup}>
-          <Ionicons name="lock-closed-outline" size={18} color={Colors.gray} style={styles.inputIcon} />
-          <TextInput
-            placeholder="Contraseña"
-            placeholderTextColor={Colors.gray}
-            secureTextEntry={!showPassword}
-            style={styles.input}
-            value={password}
-            onChangeText={setPassword}
-          />
+          }}
+        >
           <Pressable
-            style={styles.eyeButton}
-            onPress={() => setShowPassword((current) => !current)}
+            onPress={() => {
+              Keyboard.dismiss();
+              handleHapticPress();
+              setShowQuickCalc((s) => !s);
+            }}
+            style={({ pressed }) => [styles.quickButton, pressed && styles.buttonPressed]}
           >
-            <Ionicons
-              name={showPassword ? "eye-off-outline" : "eye-outline"}
-              size={18}
-              color={Colors.gray}
-            />
+            <Text style={styles.primaryButtonText}>{showQuickCalc ? "Cerrar cálculo rápido" : "Cálculo rápido"}</Text>
           </Pressable>
-        </View>
 
-        <Pressable
-          style={({ pressed }) => [styles.primaryButton, pressed && styles.buttonPressed]}
-          onPressIn={handleHapticPress}
-          onPress={handleLogin}
-        >
-          <Text style={styles.primaryButtonText}>Entrar</Text>
-        </Pressable>
+          {showQuickCalc ? (
+            <View style={styles.quickCalcCard}>
+              <View style={styles.quickCalcHeader}>
+                <View>
+                  <Text style={styles.demoTitle}>Cálculo rápido (sin registro)</Text>
+                  <Text style={styles.helperText}>Realiza un cálculo básico para ver estimaciones sin guardar datos.</Text>
+                </View>
 
-        <Pressable
-          onPressIn={handleHapticPress}
-          onPress={() => router.push("/register")}
-        >
-          <Text style={styles.link}>Crear cuenta nueva</Text>
-        </Pressable>
+                <Pressable onPress={Keyboard.dismiss} style={styles.keyboardButton}>
+                  <Ionicons name="keyboard-outline" size={18} color={Colors.primary} />
+                  <Text style={styles.keyboardButtonText}>Ocultar teclado</Text>
+                </Pressable>
+              </View>
 
-        <Pressable
-          onPressIn={handleHapticPress}
-          onPress={() => router.push("/recover-password")}
+              <View style={styles.inputGroupSmall}>
+                <TextInput
+                  placeholder="Consumo mensual (kWh)"
+                  placeholderTextColor={Colors.gray}
+                  style={styles.input}
+                  keyboardType="numeric"
+                  value={monthly}
+                  onChangeText={(v) => setMonthly(v.replace(/[^0-9.]/g, ""))}
+                  returnKeyType="done"
+                  blurOnSubmit
+                  onSubmitEditing={Keyboard.dismiss}
+                  selectionColor={Colors.primary}
+                />
+              </View>
+
+              <View style={styles.calcResultRow}>
+                <Text style={styles.calcLabel}>Paneles estimados:</Text>
+                <Text style={styles.calcValue}>{panelsEstimate}</Text>
+              </View>
+              <View style={styles.calcResultRow}>
+                <Text style={styles.calcLabel}>Inversor recomendado:</Text>
+                <Text style={styles.calcValue}>{estimateBase?.inverter || "-"}</Text>
+              </View>
+            </View>
+          ) : null}
+        </Animated.View>
+
+        <Animated.View
+          style={[
+            styles.formCard,
+            {
+              opacity: entryOpacity,
+              transform: [{ translateY: entryTranslateY }],
+            },
+          ]}
         >
-          <Text style={styles.linkMuted}>Recuperar contraseña</Text>
-        </Pressable>
-      </Animated.View>
-    </View>
+          <Text style={styles.formTitle}>Iniciar sesión</Text>
+          <Text style={styles.helperText}>
+            Usa tu correo y contraseña para entrar al panel correspondiente.
+          </Text>
+
+          <View style={styles.inputGroup}>
+            <Ionicons name="mail-outline" size={18} color={Colors.gray} style={styles.inputIcon} />
+            <TextInput
+              placeholder="Correo"
+              placeholderTextColor={Colors.gray}
+              style={styles.input}
+              value={email}
+              onChangeText={setEmail}
+              autoCapitalize="none"
+              keyboardType="email-address"
+            />
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Ionicons name="lock-closed-outline" size={18} color={Colors.gray} style={styles.inputIcon} />
+            <TextInput
+              placeholder="Contraseña"
+              placeholderTextColor={Colors.gray}
+              secureTextEntry={!showPassword}
+              style={styles.input}
+              value={password}
+              onChangeText={setPassword}
+            />
+            <Pressable
+              style={styles.eyeButton}
+              onPress={() => setShowPassword((current) => !current)}
+            >
+              <Ionicons
+                name={showPassword ? "eye-off-outline" : "eye-outline"}
+                size={18}
+                color={Colors.gray}
+              />
+            </Pressable>
+          </View>
+
+          <Pressable
+            style={({ pressed }) => [styles.primaryButton, pressed && styles.buttonPressed]}
+            onPressIn={handleHapticPress}
+            onPress={handleLogin}
+          >
+            <Text style={styles.primaryButtonText}>Entrar</Text>
+          </Pressable>
+
+          <Pressable
+            onPressIn={handleHapticPress}
+            onPress={() => router.push("/register")}
+          >
+            <Text style={styles.link}>Crear cuenta nueva</Text>
+          </Pressable>
+
+          <Pressable
+            onPressIn={handleHapticPress}
+            onPress={() => router.push("/recover-password")}
+          >
+            <Text style={styles.linkMuted}>Recuperar contraseña</Text>
+          </Pressable>
+        </Animated.View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -231,6 +261,13 @@ const styles = StyleSheet.create({
     justifyContent: "flex-start",
     paddingTop: 36,
     overflow: "hidden",
+  },
+  scrollArea: {
+    flex: 1,
+  },
+  scrollContent: {
+    gap: 16,
+    paddingBottom: 28,
   },
   backgroundGlowOne: {
     position: "absolute",
@@ -330,6 +367,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 0,
     color: Colors.dark,
     flex: 1,
+    fontSize: 16,
+    minHeight: 22,
+    includeFontPadding: false,
+    textAlignVertical: "center",
   },
   eyeButton: {
     padding: 6,
@@ -386,6 +427,9 @@ const styles = StyleSheet.create({
     padding: 16,
     gap: 8,
   },
+  quickCalcHeader: {
+    gap: 10,
+  },
   quickButton: {
     backgroundColor: Colors.primary,
     paddingVertical: 12,
@@ -399,6 +443,21 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 12,
     paddingHorizontal: 10,
+  },
+  keyboardButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    backgroundColor: "#EEF7F2",
+  },
+  keyboardButtonText: {
+    color: Colors.primary,
+    fontWeight: "700",
+    fontSize: 12,
   },
   calcResultRow: {
     flexDirection: "row",

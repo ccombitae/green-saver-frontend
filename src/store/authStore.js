@@ -1,3 +1,7 @@
+// `authStore` maneja el estado de sesión en la aplicación.
+// Contiene: inicio de sesión remoto/local (fallback legacy), persistencia en AsyncStorage,
+// refresco de tokens y lógica para decidir expiraciones y roles.
+// Comentarios añadidos para facilitar la explicación durante la sustentación.
 import { API_BASE_URL, apiRequest, setApiAuthTokenResolver, setApiUnauthorizedHandler } from "@/src/services/apiClient";
 import { loginRemoteUser, registerRemoteAuthUser, resetRemotePassword } from "@/src/services/backend";
 import {
@@ -42,6 +46,8 @@ const toNumber = (value) => {
 };
 
 const decodeJwtPayload = (token) => {
+  // Decodifica la parte payload de un JWT sin verificar firma.
+  // Útil para obtener claims (exp, role, email) en el cliente.
   if (!token || typeof token !== "string") {
     return null;
   }
@@ -67,6 +73,10 @@ const decodeJwtPayload = (token) => {
 };
 
 const resolveTokenExpiry = (payload = {}, token = null) => {
+  // Determina una fecha ISO de expiración para la sesión.
+  // Intenta leer campos explícitos (tokenExpiresAt/expiresAt), luego
+  // usa expires_in (segundos) si está disponible, y finalmente mira el claim `exp` del JWT.
+  // Si no encuentra ningún dato, aplica un TTL por defecto.
   const explicitExpiry = payload.tokenExpiresAt || payload.expiresAt || payload.expires_at;
 
   if (explicitExpiry) {
@@ -125,6 +135,8 @@ const extractAuthPayload = (payload) => {
 };
 
 const normalizeRemoteSession = (payload, fallbackEmail) => {
+  // Normaliza la estructura de la respuesta del backend hacia un formato
+  // uniforme usado internamente por el store: { user, token, refreshToken, tokenExpiresAt }
   const data = extractAuthPayload(payload);
   const token = data.token || data.access_token || data.accessToken || null;
   const refreshToken = data.refreshToken || data.refresh_token || null;
@@ -207,6 +219,10 @@ export const useAuthStore = create(
         set({ loading: true });
 
         try {
+          // Rehidrata el estado persistido y aplica reglas de inicio:
+          // - Si estamos apuntando al backend en Render y existe un user sin token, cerramos sesión.
+          // - Si el token expiró y hay refreshToken, intentamos refrescar la sesión.
+          // - Si no hay sesión remota y no estamos contra Render, intentamos fallback legacy local.
           await useAuthStore.persist.rehydrate();
 
           const current = get();
