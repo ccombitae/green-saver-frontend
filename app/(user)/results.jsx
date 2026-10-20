@@ -1,28 +1,100 @@
+import { formatCop } from "@/src/services/solarEstimate";
 import { Colors } from "@/src/theme/colors";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { useMemo } from "react";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+
+const SOURCE_LABEL = {
+  modelo: "Radiación estimada con Machine Learning (datos NASA POWER)",
+  historico: "Radiación según el promedio histórico de la ciudad",
+  respaldo: "Radiación de referencia nacional (modelo no disponible)",
+  sin_conexion: "Estimación aproximada sin conexión",
+};
+
+const parseMonthly = (value) => {
+  try {
+    const data = JSON.parse(value || "[]");
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
+  }
+};
+
+function Stat({ label, value }) {
+  return (
+    <View style={styles.stat}>
+      <Text style={styles.statValue}>{value}</Text>
+      <Text style={styles.statLabel}>{label}</Text>
+    </View>
+  );
+}
+
+// Barras de generación mensual dibujadas con Views (sin librerías externas)
+function MonthlyChart({ data, consumption }) {
+  const max = Math.max(consumption, ...data.map((m) => m.gen)) || 1;
+  // 18 px reservados para las etiquetas de los meses; 132 px para las barras
+  const consumptionLine = 18 + (consumption / max) * 132;
+  return (
+    <View>
+      <Text style={styles.sectionTitle}>Generación estimada por mes (kWh)</Text>
+      <View style={styles.chart}>
+        <View style={[styles.consumptionLine, { bottom: consumptionLine }]} />
+        {data.map((m) => (
+          <View key={m.mes} style={styles.barColumn}>
+            <View style={styles.barTrack}>
+              <View
+                style={[
+                  styles.bar,
+                  { height: `${(m.gen / max) * 100}%` },
+                  m.cob < 100 && styles.barLow,
+                ]}
+              />
+            </View>
+            <Text style={styles.barLabel}>{m.mes.slice(0, 1)}</Text>
+          </View>
+        ))}
+      </View>
+      <Text style={styles.legend}>
+        Línea roja: tu consumo ({consumption} kWh). Barras grises: meses en que el sistema no alcanza a cubrirlo.
+      </Text>
+    </View>
+  );
+}
 
 export default function Results() {
   const router = useRouter();
   const params = useLocalSearchParams();
+  const monthly = useMemo(() => parseMonthly(params.monthly), [params.monthly]);
+  const consumption = Number(params.consumption) || 0;
 
   return (
-    <View style={styles.container}>
+    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <View style={styles.card}>
-        <Text style={styles.kicker}>Resultado</Text>
+        <Text style={styles.kicker}>Resultado{params.city ? ` · ${params.city}` : ""}</Text>
         <Text style={styles.title}>Sistema solar estimado</Text>
 
-        <Text style={styles.row}>Consumo: {params.consumption ?? "N/D"} kWh</Text>
-        <Text style={styles.row}>Paneles recomendados: {params.estimatedPanels ?? "N/D"}</Text>
-        <Text style={styles.row}>Cobertura estimada: {params.coverage ?? "N/D"}%</Text>
-        <Text style={styles.row}>Ahorro estimado: {params.estimatedSavings ?? "N/D"} kWh</Text>
+        <View style={styles.statsGrid}>
+          <Stat label="Paneles" value={params.estimatedPanels ?? "N/D"} />
+          <Stat label="Cobertura anual" value={`${params.coverage ?? "N/D"}%`} />
+          {params.powerKwp ? <Stat label="Potencia" value={`${params.powerKwp} kWp`} /> : null}
+          {params.hspAverage ? <Stat label="Horas solares pico" value={params.hspAverage} /> : null}
+          {params.annualSavingsCop ? <Stat label="Ahorro al año" value={formatCop(params.annualSavingsCop)} /> : null}
+          {params.co2KgYear ? <Stat label="CO₂ evitado al año" value={`${params.co2KgYear} kg`} /> : null}
+        </View>
+
+        <Text style={styles.row}>Consumo: {params.consumption ?? "N/D"} kWh/mes</Text>
+        {params.areaM2 ? <Text style={styles.row}>Área aproximada de techo: {params.areaM2} m²</Text> : null}
         <Text style={styles.recommendation}>{params.recommendation ?? "Sin recomendación disponible"}</Text>
+
+        {monthly.length === 12 ? <MonthlyChart data={monthly} consumption={consumption} /> : null}
+
+        <Text style={styles.source}>{SOURCE_LABEL[params.source] ?? SOURCE_LABEL.sin_conexion}</Text>
 
         <Pressable style={styles.button} onPress={() => router.push("/history")}>
           <Text style={styles.buttonText}>Ir al historial</Text>
         </Pressable>
       </View>
-    </View>
+    </ScrollView>
   );
 }
 
@@ -30,8 +102,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background,
+  },
+  content: {
     padding: 20,
-    justifyContent: "center",
+    paddingBottom: 32,
   },
   card: {
     backgroundColor: Colors.surface,
@@ -53,6 +127,29 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     marginBottom: 16,
   },
+  statsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+    marginBottom: 14,
+  },
+  stat: {
+    flexBasis: "47%",
+    flexGrow: 1,
+    backgroundColor: "#F2F8F3",
+    borderRadius: 14,
+    padding: 12,
+  },
+  statValue: {
+    color: Colors.dark,
+    fontSize: 20,
+    fontWeight: "700",
+  },
+  statLabel: {
+    color: Colors.gray,
+    fontSize: 12,
+    marginTop: 2,
+  },
   row: {
     color: Colors.dark,
     marginBottom: 8,
@@ -62,6 +159,65 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     marginTop: 4,
     marginBottom: 18,
+    lineHeight: 21,
+  },
+  sectionTitle: {
+    color: Colors.dark,
+    fontWeight: "700",
+    marginBottom: 10,
+  },
+  chart: {
+    height: 150,
+    flexDirection: "row",
+    alignItems: "flex-end",
+    gap: 4,
+    position: "relative",
+  },
+  consumptionLine: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    height: 2,
+    backgroundColor: Colors.secondary,
+    zIndex: 1,
+  },
+  barColumn: {
+    flex: 1,
+    height: "100%",
+    alignItems: "center",
+  },
+  barTrack: {
+    flex: 1,
+    width: "100%",
+    justifyContent: "flex-end",
+  },
+  bar: {
+    width: "100%",
+    backgroundColor: Colors.primary,
+    borderTopLeftRadius: 4,
+    borderTopRightRadius: 4,
+  },
+  barLow: {
+    backgroundColor: "#9CA3AF",
+  },
+  barLabel: {
+    color: Colors.gray,
+    fontSize: 11,
+    height: 16,
+    marginTop: 2,
+  },
+  legend: {
+    color: Colors.gray,
+    fontSize: 12,
+    marginTop: 8,
+    lineHeight: 17,
+  },
+  source: {
+    color: Colors.gray,
+    fontSize: 12,
+    fontStyle: "italic",
+    marginTop: 14,
+    marginBottom: 16,
   },
   button: {
     backgroundColor: Colors.primary,

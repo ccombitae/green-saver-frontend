@@ -1,10 +1,19 @@
 import { useAuth } from "@/src/context/AuthContext";
 import { createRemoteCalculation } from "@/src/services/backend";
+import {
+  DEFAULT_CITY,
+  buildCalculationResult,
+  estimateSolarSystem,
+  fallbackEstimate,
+  formatCop,
+  getMlCities,
+} from "@/src/services/solarEstimate";
 import { appendStoredCalculation } from "@/src/services/storage";
 import { Colors } from "@/src/theme/colors";
 import { useRouter } from "expo-router";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
+    ActivityIndicator,
     Alert,
     Pressable,
     ScrollView,
@@ -19,6 +28,24 @@ export default function Calculator() {
   const { user } = useAuth();
   const [consumption, setConsumption] = useState("");
   const [calculated, setCalculated] = useState(null);
+  const [cities, setCities] = useState([DEFAULT_CITY]);
+  const [city, setCity] = useState(DEFAULT_CITY);
+  const [showCities, setShowCities] = useState(false);
+  const [citySearch, setCitySearch] = useState("");
+  const [isCalculating, setIsCalculating] = useState(false);
+
+  // Carga el catálogo de ciudades del modelo de ML al abrir la pantalla
+  useEffect(() => {
+    getMlCities().then(setCities);
+  }, []);
+
+  const filteredCities = useMemo(() => {
+    const term = citySearch.trim().toLowerCase();
+    if (!term) return cities;
+    return cities.filter(
+      (c) => c.nombre.toLowerCase().includes(term) || c.departamento.toLowerCase().includes(term)
+    );
+  }, [cities, citySearch]);
 
   const handleCalculate = async () => {
     const parsedConsumption = Number(consumption);
@@ -28,42 +55,25 @@ export default function Calculator() {
       return;
     }
 
-    const panelOutput = 75;
-    const estimatedPanels = Math.max(1, Math.ceil(parsedConsumption / panelOutput));
-    const estimatedGeneration = estimatedPanels * panelOutput;
-    const coverage = Math.min(100, Math.round((estimatedGeneration / parsedConsumption) * 100));
-    const estimatedSavings = Math.round(parsedConsumption * 0.65);
-    const recommendation =
-      coverage >= 90
-        ? "Sistema altamente viable"
-        : coverage >= 60
-          ? "Sistema viable con ajuste"
-          : "Requiere evaluación adicional";
-
-    const result = {
-      id: String(Date.now()),
-      date: new Date().toLocaleDateString("es-ES", {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-      }),
-      consumption: parsedConsumption,
-      estimatedPanels,
-      coverage,
-      estimatedSavings,
-      recommendation,
-      requestedBy: user?.email || "cliente@correo.com",
-      clientName: user?.name || "Cliente",
-    };
+    setIsCalculating(true);
+    let result;
+    try {
+      // 1. El backend predice las Horas Solares Pico de la ciudad con el modelo de ML
+      const estimate = await estimateSolarSystem({ consumption: parsedConsumption, cityId: city.id });
+      result = buildCalculationResult(estimate, { consumption: parsedConsumption, user });
+    } catch {
+      // 2. Sin conexión: fórmula aproximada para no bloquear al usuario
+      result = fallbackEstimate({ consumption: parsedConsumption, user, cityName: city.nombre });
+    }
 
     try {
       await createRemoteCalculation({
         email: user?.email || "cliente@correo.com",
-        consumption: parsedConsumption,
-        estimatedPanels,
-        coverage,
-        estimatedSavings,
-        recommendation,
+        consumption: result.consumption,
+        estimatedPanels: result.estimatedPanels,
+        coverage: result.coverage,
+        estimatedSavings: result.estimatedSavings,
+        recommendation: result.recommendation,
       });
     } catch {
       // Si backend no está disponible, guardamos localmente
@@ -71,6 +81,7 @@ export default function Calculator() {
 
     await appendStoredCalculation(result);
     setCalculated(result);
+    setIsCalculating(false);
     router.push({ pathname: "/results", params: result });
   };
 
@@ -83,11 +94,46 @@ export default function Calculator() {
         <Text style={styles.kicker}>Simulación</Text>
         <Text style={styles.title}>Calculadora solar</Text>
         <Text style={styles.subtitle}>
-          Escribe tu consumo mensual para obtener una estimación rápida.
+          Elige tu ciudad y escribe tu consumo mensual. Un modelo de Machine Learning estima la radiación solar de
+          tu zona mes a mes para dimensionar tu sistema.
         </Text>
       </View>
 
       <View style={styles.card}>
+        <Text style={styles.label}>Ciudad</Text>
+        <Pressable style={styles.citySelector} onPress={() => setShowCities((v) => !v)}>
+          <Text style={styles.cityName}>{city.nombre}</Text>
+          <Text style={styles.cityDept}>{city.departamento} · {showCities ? "Cerrar" : "Cambiar"}</Text>
+        </Pressable>
+
+        {showCities ? (
+          <View style={styles.cityList}>
+            <TextInput
+              value={citySearch}
+              onChangeText={setCitySearch}
+              placeholder="Buscar ciudad o departamento"
+              placeholderTextColor={Colors.gray}
+              style={styles.input}
+            />
+            <ScrollView style={styles.cityScroll} nestedScrollEnabled>
+              {filteredCities.map((c) => (
+                <Pressable
+                  key={c.id}
+                  style={[styles.cityOption, c.id === city.id && styles.cityOptionActive]}
+                  onPress={() => {
+                    setCity(c);
+                    setShowCities(false);
+                    setCitySearch("");
+                  }}
+                >
+                  <Text style={styles.cityOptionText}>{c.nombre}</Text>
+                  <Text style={styles.cityOptionDept}>{c.departamento}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
+        ) : null}
+
         <Text style={styles.label}>Consumo mensual (kWh)</Text>
         <Text style={styles.helper}>Ingresa tu promedio mensual para calcular una propuesta inicial.</Text>
         <TextInput
@@ -99,8 +145,16 @@ export default function Calculator() {
           style={styles.input}
         />
 
-        <Pressable style={styles.button} onPress={handleCalculate}>
-          <Text style={styles.buttonText}>Calcular sistema</Text>
+        <Pressable
+          style={[styles.button, isCalculating && styles.buttonDisabled]}
+          onPress={handleCalculate}
+          disabled={isCalculating}
+        >
+          {isCalculating ? (
+            <ActivityIndicator color={Colors.surface} />
+          ) : (
+            <Text style={styles.buttonText}>Calcular sistema</Text>
+          )}
         </Pressable>
       </View>
 
@@ -117,7 +171,9 @@ export default function Calculator() {
           </View>
           <View style={styles.resultRow}>
             <Text style={styles.resultLabel}>Ahorro</Text>
-            <Text style={styles.resultValue}>{calculated.estimatedSavings} kWh</Text>
+            <Text style={styles.resultValue}>
+              {calculated.annualSavingsCop ? `${formatCop(calculated.annualSavingsCop)} / año` : `${calculated.estimatedSavings} kWh`}
+            </Text>
           </View>
         </View>
       ) : null}
@@ -209,6 +265,53 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     paddingVertical: 14,
     alignItems: "center",
+  },
+  buttonDisabled: {
+    opacity: 0.7,
+  },
+  citySelector: {
+    backgroundColor: "#F2F8F3",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#CFE5D8",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  cityName: {
+    color: Colors.dark,
+    fontWeight: "700",
+    fontSize: 16,
+  },
+  cityDept: {
+    color: Colors.primary,
+    fontSize: 13,
+    marginTop: 2,
+  },
+  cityList: {
+    gap: 8,
+  },
+  cityScroll: {
+    maxHeight: 220,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#E4EEE8",
+  },
+  cityOption: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "#EEF3F0",
+  },
+  cityOptionActive: {
+    backgroundColor: "#E6F6EE",
+  },
+  cityOptionText: {
+    color: Colors.dark,
+    fontWeight: "600",
+  },
+  cityOptionDept: {
+    color: Colors.gray,
+    fontSize: 12,
   },
   buttonText: {
     color: Colors.surface,
