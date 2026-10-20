@@ -50,6 +50,11 @@ export default function AdminDashboard() {
           <Text style={styles.actionText}>Consultar métricas generales del sistema.</Text>
         </Pressable>
 
+        <Pressable style={styles.actionCard} onPress={() => router.push("/solar-dashboard")}>
+          <Text style={styles.actionTitle}>Dashboard solar (EDA)</Text>
+          <Text style={styles.actionText}>Análisis exploratorio de la radiación en Colombia y desempeño del modelo de ML.</Text>
+        </Pressable>
+
         <Pressable style={styles.actionCard} onPress={() => router.push("/quotes")}>
           <Text style={styles.actionTitle}>Enviar cotización</Text>
           <Text style={styles.actionText}>Envía una propuesta a clientes que ya calcularon su sistema.</Text>
