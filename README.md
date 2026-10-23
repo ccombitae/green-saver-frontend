@@ -101,7 +101,7 @@ Para ejecutar el frontend apuntando al backend cloud:
 
 ```powershell
 Set-Location C:\Users\combi\green-saver
-$env:EXPO_PUBLIC_API_URL='https://green-saver-api.onrender.com'
+$env:EXPO_PUBLIC_API_URL='https://green-saver-api-e0cjeqdccwg0h9dr.canadacentral-01.azurewebsites.net'
 npx expo start --host lan --port 8090 --clear
 ```
 
@@ -111,7 +111,7 @@ Si el celular no conecta por LAN, usa tunnel:
 npm run start:tunnel
 ```
 
-Si `EXPO_PUBLIC_API_URL` no se define, el proyecto usa `http://localhost:8000` por defecto.
+Si `EXPO_PUBLIC_API_URL` no se define, la app usa la API publicada en Azure.
 
 ---
 

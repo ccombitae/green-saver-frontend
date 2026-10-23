@@ -2,7 +2,8 @@
 // - Construye URLs relativas a `API_BASE_URL`.
 // - Añade la cabecera `Authorization: Bearer <token>` si el resolver proporciona un token.
 // - Normaliza errores y delega manejo de 401/403 al `unauthorizedHandler`.
-const DEFAULT_API_BASE_URL = "https://green-saver-api.onrender.com";
+// API desplegada en Azure App Service (Canada Central).
+const DEFAULT_API_BASE_URL = "https://green-saver-api-e0cjeqdccwg0h9dr.canadacentral-01.azurewebsites.net";
 let authTokenResolver = () => null;
 let unauthorizedHandler = null;
 
@@ -15,6 +16,12 @@ const sanitizeBaseUrl = (value) => {
 };
 
 export const API_BASE_URL = sanitizeBaseUrl(process.env.EXPO_PUBLIC_API_URL);
+
+// true cuando la app habla con una API publicada (no con un servidor local de desarrollo).
+export const IS_REMOTE_BACKEND =
+  typeof API_BASE_URL === "string" &&
+  API_BASE_URL.startsWith("https://") &&
+  !/localhost|127\.0\.0\.1|10\.0\.2\.2/.test(API_BASE_URL);
 
 export const setApiAuthTokenResolver = (resolver) => {
   authTokenResolver = typeof resolver === "function" ? resolver : () => null;

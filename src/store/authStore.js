@@ -2,7 +2,7 @@
 // Contiene: inicio de sesión remoto/local (fallback legacy), persistencia en AsyncStorage,
 // refresco de tokens y lógica para decidir expiraciones y roles.
 // Comentarios añadidos para facilitar la explicación durante la sustentación.
-import { API_BASE_URL, apiRequest, setApiAuthTokenResolver, setApiUnauthorizedHandler } from "@/src/services/apiClient";
+import { IS_REMOTE_BACKEND, apiRequest, setApiAuthTokenResolver, setApiUnauthorizedHandler } from "@/src/services/apiClient";
 import { loginRemoteUser, registerRemoteAuthUser, resetRemotePassword } from "@/src/services/backend";
 import {
     clearStoredCurrentUser,
@@ -220,13 +220,13 @@ export const useAuthStore = create(
 
         try {
           // Rehidrata el estado persistido y aplica reglas de inicio:
-          // - Si estamos apuntando al backend en Render y existe un user sin token, cerramos sesión.
+          // - Si estamos apuntando a la API publicada (Azure) y existe un user sin token, cerramos sesión.
           // - Si el token expiró y hay refreshToken, intentamos refrescar la sesión.
           // - Si no hay sesión remota y no estamos contra Render, intentamos fallback legacy local.
           await useAuthStore.persist.rehydrate();
 
           const current = get();
-          const isRenderBackend = typeof API_BASE_URL === "string" && API_BASE_URL.includes("onrender.com");
+          const isRenderBackend = IS_REMOTE_BACKEND;
 
           if (isRenderBackend && current.user && !current.token) {
             await get().logout({ silent: true });
@@ -284,7 +284,7 @@ export const useAuthStore = create(
       login: async (email, password) => {
         const normalizedEmail = normalizeText(email).toLowerCase();
         const normalizedPassword = normalizeText(password);
-        const isRenderBackend = typeof API_BASE_URL === "string" && API_BASE_URL.includes("onrender.com");
+        const isRenderBackend = IS_REMOTE_BACKEND;
 
         if (!normalizedEmail || !normalizedPassword) {
           throw new Error("Correo y contraseña son obligatorios");
@@ -352,7 +352,7 @@ export const useAuthStore = create(
         const normalizedPassword = normalizeText(password);
         const normalizedName = normalizeText(name) || getDisplayName(normalizedEmail);
         const normalizedPhone = normalizeText(phone);
-        const isRenderBackend = typeof API_BASE_URL === "string" && API_BASE_URL.includes("onrender.com");
+        const isRenderBackend = IS_REMOTE_BACKEND;
 
         if (!normalizedEmail || !normalizedPassword) {
           throw new Error("Correo y contraseña son obligatorios");
