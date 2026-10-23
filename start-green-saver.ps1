@@ -2,7 +2,7 @@ param(
     [string]$BackendPath = "",
     [string]$BackendPython = "",
     [string]$FrontendPath = "",
-    [string]$RenderApiUrl = "https://green-saver-api.onrender.com",
+    [string]$RenderApiUrl = "https://green-saver-api-e0cjeqdccwg0h9dr.canadacentral-01.azurewebsites.net",
     [switch]$ForceLocalBackend,
     [string]$MysqlExe = "C:\xampp\mysql\bin\mysqld.exe",
     [string]$MysqlConfig = "C:\xampp\mysql\bin\my.ini",
