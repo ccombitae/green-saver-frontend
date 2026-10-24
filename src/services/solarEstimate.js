@@ -53,10 +53,34 @@ export const buildCalculationResult = (estimate, { consumption, user }) => {
     city: estimate.ciudad?.nombre ?? "",
     hspAverage: estimate.hsp_promedio,
     powerKwp: estimate.potencia_kwp,
-    areaM2: estimate.area_aprox_m2,
+    areaM2: estimate.instalacion?.area_techo_recomendada_m2 ?? estimate.area_aprox_m2,
     annualSavingsCop: estimate.ahorro_anual_cop,
     co2KgYear: estimate.co2_evitado_kg_anual,
     source: estimate.fuente_hsp,
+    // Equipos recomendados (inversor, techo y baterías), como JSON para pasarlo por la navegación
+    equipment: estimate.inversor
+      ? JSON.stringify({
+          inverterKw: estimate.inversor.potencia_kw,
+          inverterType: estimate.inversor.tipo,
+          inverterConnection: estimate.inversor.conexion,
+          inverterAlternative: estimate.inversor.alternativa,
+          panelAreaM2: estimate.instalacion.area_paneles_m2,
+          roofAreaM2: estimate.instalacion.area_techo_recomendada_m2,
+          tiltDeg: estimate.instalacion.inclinacion_grados,
+          orientation: estimate.instalacion.orientacion,
+          weightKg: estimate.instalacion.peso_total_kg,
+          loadKgM2: estimate.instalacion.carga_kg_m2,
+          annualKwh: estimate.generacion_anual_kwh,
+          specificYield: estimate.rendimiento_especifico_kwh_kwp,
+          batteryTech: estimate.baterias.tecnologia,
+          batteryNightModules: estimate.baterias.respaldo_nocturno.modulos,
+          batteryNightKwh: estimate.baterias.respaldo_nocturno.capacidad_instalada_kwh,
+          batteryDayModules: estimate.baterias.autonomia_un_dia.modulos,
+          batteryDayKwh: estimate.baterias.autonomia_un_dia.capacidad_instalada_kwh,
+          batteryNote: estimate.baterias.nota,
+          notes: estimate.instalacion.notas,
+        })
+      : "",
     monthly: JSON.stringify(
       (estimate.detalle_mensual || []).map((m) => ({ mes: m.mes, gen: m.generacion_kwh, cob: m.cobertura_pct }))
     ),

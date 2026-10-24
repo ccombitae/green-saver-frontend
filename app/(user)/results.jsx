@@ -61,11 +61,79 @@ function MonthlyChart({ data, consumption }) {
   );
 }
 
+const parseEquipment = (value) => {
+  try {
+    return value ? JSON.parse(value) : null;
+  } catch {
+    return null;
+  }
+};
+
+const fmt = (value, digits = 1) =>
+  Number(value).toLocaleString("es-CO", { minimumFractionDigits: 0, maximumFractionDigits: digits });
+
+function KeyValue({ label, value }) {
+  return (
+    <View style={styles.kvRow}>
+      <Text style={styles.kvLabel}>{label}</Text>
+      <Text style={styles.kvValue}>{value}</Text>
+    </View>
+  );
+}
+
+function Equipment({ data }) {
+  if (!data) return null;
+  return (
+    <View style={styles.equip}>
+      <Text style={styles.sectionTitle}>Equipos e instalación recomendados</Text>
+
+      <View style={styles.equipCard}>
+        <Text style={styles.equipTitle}>Inversor</Text>
+        <Text style={styles.equipBig}>{fmt(data.inverterKw)} kW</Text>
+        <KeyValue label="Tipo" value={data.inverterType} />
+        <KeyValue label="Conexión" value={data.inverterConnection} />
+        <Text style={styles.equipNote}>{data.inverterAlternative}.</Text>
+      </View>
+
+      <View style={styles.equipCard}>
+        <Text style={styles.equipTitle}>En tu techo</Text>
+        <Text style={styles.equipBig}>{fmt(data.roofAreaM2)} m²</Text>
+        <KeyValue label="Área de paneles" value={`${fmt(data.panelAreaM2)} m²`} />
+        <KeyValue label="Inclinación" value={`${data.tiltDeg}°`} />
+        <KeyValue label="Orientación" value={data.orientation} />
+        <KeyValue label="Peso total" value={`${fmt(data.weightKg, 0)} kg (${fmt(data.loadKgM2)} kg/m²)`} />
+        <KeyValue label="Producción al año" value={`${fmt(data.annualKwh, 0)} kWh`} />
+      </View>
+
+      <View style={styles.equipCard}>
+        <Text style={styles.equipTitle}>Baterías (opcional)</Text>
+        <Text style={styles.equipNote}>{data.batteryTech}</Text>
+        <KeyValue
+          label="Respaldo nocturno"
+          value={`${data.batteryNightModules} módulo${data.batteryNightModules > 1 ? "s" : ""} · ${fmt(data.batteryNightKwh, 2)} kWh`}
+        />
+        <KeyValue
+          label="Un día de autonomía"
+          value={`${data.batteryDayModules} módulo${data.batteryDayModules > 1 ? "s" : ""} · ${fmt(data.batteryDayKwh, 2)} kWh`}
+        />
+        <Text style={styles.equipNote}>{data.batteryNote}</Text>
+      </View>
+
+      {(data.notes || []).map((n) => (
+        <Text key={n} style={styles.legend}>
+          • {n}
+        </Text>
+      ))}
+    </View>
+  );
+}
+
 export default function Results() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const monthly = useMemo(() => parseMonthly(params.monthly), [params.monthly]);
   const consumption = Number(params.consumption) || 0;
+  const equipment = useMemo(() => parseEquipment(params.equipment), [params.equipment]);
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -83,10 +151,12 @@ export default function Results() {
         </View>
 
         <Text style={styles.row}>Consumo: {params.consumption ?? "N/D"} kWh/mes</Text>
-        {params.areaM2 ? <Text style={styles.row}>Área aproximada de techo: {params.areaM2} m²</Text> : null}
+        {params.areaM2 ? <Text style={styles.row}>Área de techo recomendada: {fmt(params.areaM2)} m²</Text> : null}
         <Text style={styles.recommendation}>{params.recommendation ?? "Sin recomendación disponible"}</Text>
 
         {monthly.length === 12 ? <MonthlyChart data={monthly} consumption={consumption} /> : null}
+
+        <Equipment data={equipment} />
 
         <Text style={styles.source}>{SOURCE_LABEL[params.source] ?? SOURCE_LABEL.sin_conexion}</Text>
 
@@ -218,6 +288,50 @@ const styles = StyleSheet.create({
     fontStyle: "italic",
     marginTop: 14,
     marginBottom: 16,
+  },
+  equip: {
+    marginTop: 18,
+  },
+  equipCard: {
+    backgroundColor: "#F2F8F3",
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 10,
+  },
+  equipTitle: {
+    color: Colors.primary,
+    fontWeight: "700",
+    marginBottom: 2,
+  },
+  equipBig: {
+    color: Colors.dark,
+    fontSize: 22,
+    fontWeight: "700",
+    marginBottom: 8,
+  },
+  equipNote: {
+    color: Colors.gray,
+    fontSize: 12,
+    marginTop: 6,
+    lineHeight: 17,
+  },
+  kvRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: 12,
+    paddingVertical: 3,
+  },
+  kvLabel: {
+    color: Colors.gray,
+    fontSize: 13,
+    flexShrink: 0,
+  },
+  kvValue: {
+    color: Colors.dark,
+    fontSize: 13,
+    fontWeight: "700",
+    flex: 1,
+    textAlign: "right",
   },
   button: {
     backgroundColor: Colors.primary,
