@@ -128,12 +128,55 @@ function Equipment({ data }) {
   );
 }
 
+function Costs({ data }) {
+  if (!data) return null;
+  const [pMin, pMax] = data.payback || [];
+  return (
+    <View style={styles.equip}>
+      <Text style={styles.sectionTitle}>Costo estimado</Text>
+      <View style={styles.equipCard}>
+        <Text style={styles.equipBig}>{formatCop(data.total)}</Text>
+        <Text style={styles.equipNote}>
+          {formatCop(data.perKwp)} por kWp · Mercado: {formatCop(data.market[0])} a {formatCop(data.market[1])}
+        </Text>
+        <View style={{ marginTop: 8 }}>
+          {data.detail.map(([rubro, valor]) => (
+            <CostRow key={rubro} label={rubro} value={formatCop(valor)} />
+          ))}
+        </View>
+        <View style={styles.costTotal}>
+          <CostRow label="Total estimado" value={formatCop(data.total)} bold />
+        </View>
+        <CostRow label="Recuperas la inversión" value={pMin != null ? `${fmt(pMin)} a ${fmt(pMax)} años` : "N/D"} />
+        <CostRow label="Con baterías de respaldo" value={`+ ${formatCop(data.batteryExtra)}`} />
+        <CostRow label="Mantenimiento al año" value={`${formatCop(data.maintenance[0])} a ${formatCop(data.maintenance[1])}`} />
+      </View>
+      {(data.notes || []).map((n) => (
+        <Text key={n} style={styles.legend}>
+          • {n}
+        </Text>
+      ))}
+      <Text style={styles.legend}>Precios de referencia del mercado colombiano ({data.date}).</Text>
+    </View>
+  );
+}
+
+function CostRow({ label, value, bold }) {
+  return (
+    <View style={styles.kvRow}>
+      <Text style={[styles.costLabel, bold && styles.costLabelBold]}>{label}</Text>
+      <Text style={styles.costValue}>{value}</Text>
+    </View>
+  );
+}
+
 export default function Results() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const monthly = useMemo(() => parseMonthly(params.monthly), [params.monthly]);
   const consumption = Number(params.consumption) || 0;
   const equipment = useMemo(() => parseEquipment(params.equipment), [params.equipment]);
+  const costs = useMemo(() => parseEquipment(params.costs), [params.costs]);
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -157,6 +200,7 @@ export default function Results() {
         {monthly.length === 12 ? <MonthlyChart data={monthly} consumption={consumption} /> : null}
 
         <Equipment data={equipment} />
+        <Costs data={costs} />
 
         <Text style={styles.source}>{SOURCE_LABEL[params.source] ?? SOURCE_LABEL.sin_conexion}</Text>
 
@@ -314,6 +358,29 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 6,
     lineHeight: 17,
+  },
+  costTotal: {
+    borderTopWidth: 2,
+    borderTopColor: Colors.primary,
+    marginTop: 6,
+    paddingTop: 4,
+    marginBottom: 6,
+  },
+  costLabel: {
+    color: Colors.gray,
+    fontSize: 13,
+    flex: 1,
+  },
+  costLabelBold: {
+    color: Colors.dark,
+    fontWeight: "700",
+  },
+  costValue: {
+    color: Colors.dark,
+    fontSize: 13,
+    fontWeight: "700",
+    flexShrink: 0,
+    textAlign: "right",
   },
   kvRow: {
     flexDirection: "row",

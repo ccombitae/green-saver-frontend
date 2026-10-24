@@ -81,6 +81,20 @@ export const buildCalculationResult = (estimate, { consumption, user }) => {
           notes: estimate.instalacion.notas,
         })
       : "",
+    // Costo estimado (equipos, mano de obra y trámites) con precios de referencia
+    costs: estimate.costos
+      ? JSON.stringify({
+          total: estimate.costos.total_cop,
+          perKwp: estimate.costos.costo_por_kwp_cop,
+          market: estimate.costos.rango_mercado_cop,
+          payback: estimate.costos.retorno_rango_anios,
+          detail: estimate.costos.detalle.map((r) => [r.rubro, r.valor_cop]),
+          batteryExtra: estimate.costos.respaldo_baterias.costo_adicional_cop,
+          maintenance: estimate.costos.mantenimiento_anual_cop,
+          date: estimate.costos.fecha_precios,
+          notes: estimate.costos.notas,
+        })
+      : "",
     monthly: JSON.stringify(
       (estimate.detalle_mensual || []).map((m) => ({ mes: m.mes, gen: m.generacion_kwh, cob: m.cobertura_pct }))
     ),
