@@ -20,7 +20,7 @@ export default function UserLayout() {
   return (
     <NavigationShell
       title="GREEN SAVER"
-      rootPaths={["/dashboard"]}
+      rootPaths={["/", "/dashboard", "/calculator", "/system", "/profile"]}
       backgroundColor={"#F7FAF8"}
     >
       <Slot />
